@@ -16,6 +16,7 @@ export function createNetgraph() {
     correction: 0,
     maxCorrection: 0,
     delayMs: 100,
+    starved: 0,
     codec: "binary",
     prediction: true,
     netsim: { lag: 0, jitter: 0, drop: 0 },
@@ -39,7 +40,7 @@ export function createNetgraph() {
         `snapshot   ${stats.snapshotBytes} B (${stats.codec})`,
         `pending    ${stats.pending}`,
         `correction ${stats.correction.toFixed(2)} px (max ${stats.maxCorrection.toFixed(1)})`,
-        `interp     ${stats.delayMs} ms  [ ]`,
+        `interp     ${stats.delayMs} ms  [ ]  starved ${stats.starved.toFixed(0)}%`,
         `predict    ${stats.prediction ? "on" : "off"}`,
         `netsim     ${stats.netsim.lag}±${stats.netsim.jitter} ms, ${Math.round(stats.netsim.drop * 100)}% F2`,
       ];

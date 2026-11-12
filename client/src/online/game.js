@@ -245,7 +245,13 @@ export function startOnlineGame({
   }
 
   let lastFrame = performance.now();
-  let lastBytes = { at: performance.now(), in: connection.bytesIn, out: connection.bytesOut };
+  let lastBytes = {
+    at: performance.now(),
+    in: connection.bytesIn,
+    out: connection.bytesOut,
+    samples: 0,
+    starved: 0,
+  };
 
   function render(alpha, stats) {
     const now = performance.now();
@@ -258,7 +264,16 @@ export function startOnlineGame({
       netgraph.stats.bytesInPerSec = (connection.bytesIn - lastBytes.in) / seconds;
       netgraph.stats.bytesOutPerSec = (connection.bytesOut - lastBytes.out) / seconds;
       netgraph.stats.maxCorrection = Math.max(0, ...predictor.corrections.slice(-30));
-      lastBytes = { at: now, in: connection.bytesIn, out: connection.bytesOut };
+      const samples = buffer.samples - lastBytes.samples;
+      netgraph.stats.starved =
+        samples > 0 ? (100 * (buffer.starved - lastBytes.starved)) / samples : 0;
+      lastBytes = {
+        at: now,
+        in: connection.bytesIn,
+        out: connection.bytesOut,
+        samples: buffer.samples,
+        starved: buffer.starved,
+      };
     }
     netgraph.stats.pending = predictor.pending.length;
     netgraph.stats.history = predictor.corrections;

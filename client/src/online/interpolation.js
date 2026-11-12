@@ -12,6 +12,8 @@ export class SnapshotBuffer {
     this.tickMs = tickMs;
     this.delayMs = delayMs;
     this.lastReceivedAt = 0;
+    this.samples = 0;
+    this.starved = 0;
   }
 
   get latest() {
@@ -42,9 +44,12 @@ export class SnapshotBuffer {
     const list = this.#snapshots;
     if (list.length === 0) return { entities: [], tick: 0 };
     const target = this.renderTick(now);
+    this.samples += 1;
     if (target <= list[0].tick) return { entities: list[0].entities, tick: list[0].tick };
-    if (target >= list.at(-1).tick)
+    if (target >= list.at(-1).tick) {
+      this.starved += 1;
       return { entities: list.at(-1).entities, tick: list.at(-1).tick, stale: true };
+    }
 
     let i = list.length - 2;
     while (i > 0 && list[i].tick > target) i--;
