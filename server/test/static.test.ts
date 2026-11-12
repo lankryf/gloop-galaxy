@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import { test } from "node:test";
-import { resolveStatic } from "../src/http.js";
+import { resolveStatic } from "../src/http.ts";
 
 const root = path.resolve("/srv/dist");
 

@@ -1,16 +1,17 @@
 import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
-import { loadConfig } from "./config.js";
-import { createHandler } from "./http.js";
-import { logger } from "./logger.js";
-import { RoomManager } from "./rooms.js";
-import { attachSockets } from "./ws.js";
+import type { ServerConfig } from "./config.ts";
+import { loadConfig } from "./config.ts";
+import { createHandler } from "./http.ts";
+import { errorMessage, logger } from "./logger.ts";
+import { RoomManager } from "./rooms.ts";
+import { attachSockets } from "./ws.ts";
 
-let config;
+let config: ServerConfig;
 try {
   config = loadConfig();
-} catch (error) {
-  logger.error(error.message);
+} catch (error: unknown) {
+  logger.error(errorMessage(error));
   process.exit(1);
 }
 
@@ -28,7 +29,7 @@ server.listen(config.port, config.host, () => {
 
 let stopping = false;
 
-async function shutdown(signal) {
+async function shutdown(signal: string): Promise<void> {
   if (stopping) return;
   stopping = true;
   logger.info("shutting down", { signal });
@@ -47,5 +48,5 @@ async function shutdown(signal) {
   process.exit(0);
 }
 
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
