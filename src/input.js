@@ -1,9 +1,13 @@
 export function createInput(target = window) {
   const down = new Set();
   const pressed = new Set();
+  const handlers = new Map();
 
   function onKeyDown(e) {
-    if (!down.has(e.code)) pressed.add(e.code);
+    if (!down.has(e.code)) {
+      pressed.add(e.code);
+      handlers.get(e.code)?.();
+    }
     down.add(e.code);
   }
 
@@ -23,6 +27,9 @@ export function createInput(target = window) {
   return {
     isDown: (code) => down.has(code),
     justPressed: (code) => pressed.has(code),
+    onPress(code, handler) {
+      handlers.set(code, handler);
+    },
     endStep() {
       pressed.clear();
     },

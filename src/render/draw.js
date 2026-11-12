@@ -152,3 +152,39 @@ export function drawHud(ctx, view, stats, extra = []) {
     ctx.fillText(line, 20, 32 + i * 18);
   });
 }
+
+export function drawBullet(ctx, b) {
+  ctx.fillStyle = GOO;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(b.x, b.y, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+}
+
+export function drawAsteroid(ctx, a, p) {
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.angle);
+  ctx.fillStyle = "#7a6a8f";
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  const n = a.shape.length;
+  for (let i = 0; i < n; i++) {
+    const ang = (i / n) * Math.PI * 2;
+    const r = a.radius * a.shape[i];
+    if (i === 0) ctx.moveTo(Math.cos(ang) * r, Math.sin(ang) * r);
+    else ctx.lineTo(Math.cos(ang) * r, Math.sin(ang) * r);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#5b4d70";
+  ctx.beginPath();
+  ctx.arc(a.radius * 0.3, -a.radius * 0.2, a.radius * 0.22, 0, Math.PI * 2);
+  ctx.arc(-a.radius * 0.35, a.radius * 0.25, a.radius * 0.14, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}

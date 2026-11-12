@@ -1,4 +1,5 @@
 import { ARENA, wrap } from "./arena.js";
+import { BULLET, Bullet } from "./bullet.js";
 import { Entity } from "./entity.js";
 import { Vector2 } from "./vector.js";
 
@@ -43,6 +44,17 @@ export class Ship extends Entity {
     this.name = name;
     this.controls = { thrust: false, left: false, right: false };
     this.thrust = false;
+  }
+
+  attach(world) {
+    this.world = world;
+    return this;
+  }
+
+  fire() {
+    const nose = this.pos.add(Vector2.fromAngle(this.angle, this.radius + 6));
+    const vel = this.vel.add(Vector2.fromAngle(this.angle, BULLET.speed));
+    this.world.spawn(new Bullet({ pos: nose, vel, ownerId: this.id }));
   }
 
   update(dt) {
