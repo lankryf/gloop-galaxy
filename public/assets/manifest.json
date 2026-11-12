@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "sprites": {
+    "ships": {
+      "url": "/assets/sprites/ships.png",
+      "frames": {
+        "player": [0, 0, 128, 128],
+        "dummy": [128, 0, 128, 128]
+      }
+    },
+    "asteroids": {
+      "url": "/assets/sprites/asteroids.png",
+      "frames": {
+        "rock0": [0, 0, 128, 128],
+        "rock1": [128, 0, 128, 128],
+        "rock2": [256, 0, 128, 128],
+        "rock3": [384, 0, 128, 128],
+        "hunter0": [0, 128, 128, 128],
+        "hunter1": [128, 128, 128, 128],
+        "hunter2": [256, 128, 128, 128],
+        "hunter3": [384, 128, 128, 128]
+      }
+    },
+    "items": {
+      "url": "/assets/sprites/items.png",
+      "frames": {
+        "shield": [0, 0, 48, 48],
+        "rapid": [48, 0, 48, 48],
+        "homing": [96, 0, 48, 48],
+        "bullet": [144, 0, 48, 48]
+      }
+    }
+  },
+  "sounds": {
+    "shoot": "/assets/sounds/shoot.wav",
+    "hit": "/assets/sounds/hit.wav",
+    "explosion": "/assets/sounds/explosion.wav",
+    "pickup": "/assets/sounds/pickup.wav"
+  },
+  "arenas": {
+    "nebula": "/assets/arenas/nebula.json",
+    "junkyard": "/assets/arenas/junkyard.json"
+  }
+}
