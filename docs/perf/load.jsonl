@@ -1,0 +1,9 @@
+{"clients":8,"rooms":1,"entities":48,"tickP50":0.318,"tickP99":2.074,"intervalMean":33.33,"intervalJitter":0.84,"elu":0.029,"cpu":0.045,"rssMB":114,"outKBs":224}
+{"clients":32,"rooms":4,"entities":46,"tickP50":0.289,"tickP99":0.766,"intervalMean":33.33,"intervalJitter":0.82,"elu":0.057,"cpu":0.068,"rssMB":118,"outKBs":927}
+{"clients":64,"rooms":8,"entities":54,"tickP50":0.255,"tickP99":1.129,"intervalMean":33.34,"intervalJitter":0.85,"elu":0.093,"cpu":0.103,"rssMB":135,"outKBs":1876}
+{"clients":128,"rooms":16,"entities":56,"tickP50":0.27,"tickP99":0.958,"intervalMean":33.34,"intervalJitter":0.93,"elu":0.166,"cpu":0.181,"rssMB":144,"outKBs":3720}
+{"clients":256,"rooms":32,"entities":62,"tickP50":0.256,"tickP99":0.966,"intervalMean":33.34,"intervalJitter":1.19,"elu":0.315,"cpu":0.338,"rssMB":159,"outKBs":7371}
+{"clients":512,"rooms":64,"entities":60,"tickP50":0.207,"tickP99":1.308,"intervalMean":33.34,"intervalJitter":1.77,"elu":0.552,"cpu":0.579,"rssMB":164,"outKBs":14742}
+{"clients":768,"rooms":96,"entities":57,"tickP50":0.207,"tickP99":2.288,"intervalMean":33.35,"intervalJitter":3.68,"elu":0.81,"cpu":0.847,"rssMB":202,"outKBs":22025}
+{"clients":1024,"rooms":128,"entities":62,"tickP50":0.249,"tickP99":5.207,"intervalMean":41.48,"intervalJitter":15.19,"elu":1,"cpu":1.044,"rssMB":253,"outKBs":26678}
+{"clients":1280,"rooms":160,"entities":84,"tickP50":0.256,"tickP99":6.367,"intervalMean":59.75,"intervalJitter":16.3,"elu":1,"cpu":1.051,"rssMB":296,"outKBs":28175}
