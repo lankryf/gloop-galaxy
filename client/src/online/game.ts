@@ -2,6 +2,7 @@ import { decodeSnapshot } from "@gloop/shared/codec/binary.ts";
 import { codecFor } from "@gloop/shared/codec/codec.ts";
 import type { EntityId, Seq } from "@gloop/shared/ids.ts";
 import { seq as toSeq } from "@gloop/shared/ids.ts";
+import { Pool, removeWhere } from "@gloop/shared/pool.ts";
 import type {
   EntitySnap,
   NetEvent,
@@ -36,17 +37,18 @@ import { beginFrame } from "../render/canvas.ts";
 import type { ShipPose, Sprites } from "../render/draw.ts";
 import {
   drawAsteroid,
-  drawBackground,
   drawBullet,
+  drawCachedBackground,
   drawExplosion,
-  drawHud,
   drawName,
   drawPickup,
   drawShield,
   drawShip,
   drawWell,
+  hudLines,
   lerpWrapped,
 } from "../render/draw.ts";
+import { TextPanel } from "../render/panel.ts";
 import { SnapshotBuffer } from "./interpolation.ts";
 import type { Netgraph } from "./netgraph.ts";
 import { createNetgraph } from "./netgraph.ts";
@@ -54,9 +56,13 @@ import type { MovingWell, PendingInput } from "./prediction.ts";
 import { Predictor, toWellField } from "./prediction.ts";
 
 const REDUNDANCY = 3;
+const DRAW_ORDER: readonly EntitySnap["kind"][] = ["well", "pickup", "asteroid", "bullet", "ship"];
+const HUD_REFRESH_MS = 250;
+const isFinished = (e: { readonly alive: boolean }) => !e.alive;
+const isExpired = (e: { readonly ttl: number }) => e.ttl <= 0;
 
 interface LocalBullet {
-  readonly shot: Seq;
+  shot: Seq;
   x: number;
   y: number;
   vx: number;
@@ -115,8 +121,10 @@ export function startOnlineGame({
   const predictor = new Predictor({ dt: TICK_DT });
   const netgraph = createNetgraph();
   const rng = createRng(99);
-  let explosions: Explosion[] = [];
-  let popups: Popup[] = [];
+  const explosions: Explosion[] = [];
+  const explosionPool = new Pool(() => new Explosion({ pos: new Vector2(), rng }), 8);
+  const popups: Popup[] = [];
+  const releaseExplosion = (e: Explosion) => explosionPool.release(e);
   netgraph.stats.codec = welcome.codec;
   netgraph.stats.prediction = options.prediction;
   netgraph.stats.netsim = welcome.netsim;
@@ -127,7 +135,13 @@ export function startOnlineGame({
   let me: ShipSnap | null = null;
   let wells: MovingWell[] = [];
   let cooldown = 0;
-  let localBullets: LocalBullet[] = [];
+  const localBullets: LocalBullet[] = [];
+  const bulletPool = new Pool<LocalBullet>(
+    () => ({ shot: toSeq(0), x: 0, y: 0, vx: 0, vy: 0, ttl: 0, prevX: 0, prevY: 0 }),
+    16,
+  );
+  const releaseBullet = (b: LocalBullet) => bulletPool.release(b);
+  const clearBullets = () => removeWhere(localBullets, () => true, releaseBullet);
   const seenShots = new Set<number>();
 
   function readControls(): Controls {
@@ -146,7 +160,7 @@ export function startOnlineGame({
   connection.events.on("welcome", (msg) => {
     myShip = msg.shipId;
     predictor.reset();
-    localBullets = [];
+    clearBullets();
   });
   connection.events.on("roster", setNames);
   if (connection.lastRoster) setNames(connection.lastRoster);
@@ -174,7 +188,9 @@ export function startOnlineGame({
         audio?.play("hit", { volume: 0.6 });
         return;
       case "exploded":
-        explosions.push(new Explosion({ pos: new Vector2(ev.x, ev.y), rng, size: ev.size }));
+        explosions.push(
+          explosionPool.acquire().reset({ pos: new Vector2(ev.x, ev.y), rng, size: ev.size }),
+        );
         audio?.play("explosion", { volume: Math.min(1, 0.4 + ev.size * 0.3) });
         return;
       case "scored":
@@ -214,7 +230,7 @@ export function startOnlineGame({
 
     if (!isAlive(me)) {
       predictor.reset();
-      localBullets = [];
+      clearBullets();
     } else if (options.prediction) {
       const ship = me;
       measure("reconcile", () => predictor.reconcile(ship, snapshot.ack, wells));
@@ -223,7 +239,7 @@ export function startOnlineGame({
       predictor.trim(snapshot.ack);
     }
 
-    localBullets = localBullets.filter((b) => shots.has(b.shot) || !seenShots.has(b.shot));
+    removeWhere(localBullets, (b) => !shots.has(b.shot) && seenShots.has(b.shot), releaseBullet);
     for (const ev of snapshot.events) handleEvent(ev);
   }
 
@@ -247,16 +263,16 @@ export function startOnlineGame({
     const vel = Vector2.fromAngle(state.angle, BULLET.speed);
     const x = state.x + nose.x;
     const y = state.y + nose.y;
-    localBullets.push({
-      shot,
-      x,
-      y,
-      vx: state.vx + vel.x,
-      vy: state.vy + vel.y,
-      ttl: BULLET.ttl,
-      prevX: x,
-      prevY: y,
-    });
+    const b = bulletPool.acquire();
+    b.shot = shot;
+    b.x = x;
+    b.y = y;
+    b.prevX = x;
+    b.prevY = y;
+    b.vx = state.vx + vel.x;
+    b.vy = state.vy + vel.y;
+    b.ttl = BULLET.ttl;
+    localBullets.push(b);
     audio?.play("shoot", { volume: 0.5, rate: 0.95 + Math.random() * 0.1 });
   }
 
@@ -271,7 +287,7 @@ export function startOnlineGame({
       b.vy += ay * TICK_DT;
       b.ttl -= TICK_DT;
     }
-    localBullets = localBullets.filter((b) => b.ttl > 0);
+    removeWhere(localBullets, isExpired, releaseBullet);
   }
 
   function simulate(): void {
@@ -333,23 +349,31 @@ export function startOnlineGame({
     netgraph.stats.delayMs = buffer.delayMs;
   }
 
+  const ownScratch = { x: 0, y: 0, angle: 0, thrust: false };
+  const otherScratch = { x: 0, y: 0, angle: 0, thrust: false };
+  const bulletScratch = { x: 0, y: 0, angle: 0 };
+
   function ownPose(alpha: number, ship: ShipSnap): ShipPose {
     const s = predictor.state;
     if (!options.prediction || !s) {
-      return {
-        x: ship.x,
-        y: ship.y,
-        angle: ship.angle,
-        thrust: (ship.flags & ShipFlag.thrust) !== 0,
-      };
+      ownScratch.x = ship.x;
+      ownScratch.y = ship.y;
+      ownScratch.angle = ship.angle;
+      ownScratch.thrust = (ship.flags & ShipFlag.thrust) !== 0;
+      return ownScratch;
     }
     const prev = predictor.previous ?? s;
-    return {
-      x: wrap(lerpWrapped(prev.x, s.x, alpha, ARENA.width) + predictor.offset.x, ARENA.width),
-      y: wrap(lerpWrapped(prev.y, s.y, alpha, ARENA.height) + predictor.offset.y, ARENA.height),
-      angle: s.angle,
-      thrust: s.thrust,
-    };
+    ownScratch.x = wrap(
+      lerpWrapped(prev.x, s.x, alpha, ARENA.width) + predictor.offset.x,
+      ARENA.width,
+    );
+    ownScratch.y = wrap(
+      lerpWrapped(prev.y, s.y, alpha, ARENA.height) + predictor.offset.y,
+      ARENA.height,
+    );
+    ownScratch.angle = s.angle;
+    ownScratch.thrust = s.thrust;
+    return ownScratch;
   }
 
   function drawEntity(e: EntitySnap, now: number): void {
@@ -372,12 +396,19 @@ export function startOnlineGame({
         return;
       case "bullet":
         if (!(options.prediction && e.owner === myShip)) {
-          drawBullet(ctx, { x: e.x, y: e.y, angle: Math.atan2(e.vy, e.vx) }, sprites);
+          bulletScratch.x = e.x;
+          bulletScratch.y = e.y;
+          bulletScratch.angle = Math.atan2(e.vy, e.vx);
+          drawBullet(ctx, bulletScratch, sprites);
         }
         return;
       case "ship": {
         if (e.id === myShip || e.flags & ShipFlag.dead) return;
-        const p = { x: e.x, y: e.y, angle: e.angle, thrust: (e.flags & ShipFlag.thrust) !== 0 };
+        const p = otherScratch;
+        p.x = e.x;
+        p.y = e.y;
+        p.angle = e.angle;
+        p.thrust = (e.flags & ShipFlag.thrust) !== 0;
         drawShip(ctx, p, now, false, sprites);
         if (e.flags & ShipFlag.shield) drawShield(ctx, p);
         drawName(
@@ -394,6 +425,41 @@ export function startOnlineGame({
     }
   }
 
+  const hud = new TextPanel({
+    width: 190,
+    lineHeight: 18,
+    font: "14px ui-monospace, Menlo, monospace",
+    color: "#8dff3a",
+    padding: 10,
+  });
+  let hudAt = Number.NEGATIVE_INFINITY;
+
+  function buildHud(entities: readonly EntitySnap[], stats: LoopStats): string[] {
+    const self = me;
+    const effects: PickupType[] = [];
+    if (self && self.flags & ShipFlag.shield) effects.push("shield");
+    if (self && self.flags & ShipFlag.rapid) effects.push("rapid");
+    if (self && self.flags & ShipFlag.homing) effects.push("homing");
+    const scores = entities
+      .filter((e) => e.kind === "ship")
+      .filter((e) => !(e.flags & ShipFlag.bot))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+      .map((e) => `${(names.get(e.id) ?? "?").padEnd(10).slice(0, 10)} ${e.score}`);
+    const hp = !self
+      ? "-"
+      : self.flags & ShipFlag.dead
+        ? `0 (respawn ${(self.respawn / 10).toFixed(1)}s)`
+        : `${self.hp}`;
+    return hudLines(stats, [
+      `tick     ${buffer.latest?.tick ?? 0}`,
+      `hp       ${hp}`,
+      `effects  ${effects.join(", ") || "-"}`,
+      "",
+      ...scores,
+    ]);
+  }
+
   function render(alpha: number, stats: LoopStats): void {
     const now = performance.now();
     const frameSeconds = (now - lastFrame) / 1000;
@@ -403,15 +469,15 @@ export function startOnlineGame({
 
     const sampled = buffer.sample(now);
     beginFrame(ctx, view);
-    drawBackground(ctx, ARENA, theme);
-    const order: readonly EntitySnap["kind"][] = ["well", "pickup", "asteroid", "bullet", "ship"];
-    for (const kind of order) {
+    drawCachedBackground(ctx, ARENA, view, theme);
+    for (const kind of DRAW_ORDER) {
       for (const e of sampled.entities) if (e.kind === kind) drawEntity(e, now);
     }
     for (const b of localBullets) {
-      const x = lerpWrapped(b.prevX, b.x, alpha, ARENA.width);
-      const y = lerpWrapped(b.prevY, b.y, alpha, ARENA.height);
-      drawBullet(ctx, { x, y, angle: Math.atan2(b.vy, b.vx) }, sprites);
+      bulletScratch.x = lerpWrapped(b.prevX, b.x, alpha, ARENA.width);
+      bulletScratch.y = lerpWrapped(b.prevY, b.y, alpha, ARENA.height);
+      bulletScratch.angle = Math.atan2(b.vy, b.vx);
+      drawBullet(ctx, bulletScratch, sprites);
     }
 
     const self = me;
@@ -426,7 +492,7 @@ export function startOnlineGame({
       e.update(frameSeconds);
       drawExplosion(ctx, e);
     }
-    explosions = explosions.filter((e) => e.alive);
+    removeWhere(explosions, isFinished, releaseExplosion);
     ctx.textAlign = "center";
     for (const p of popups) {
       p.ttl -= frameSeconds;
@@ -440,30 +506,16 @@ export function startOnlineGame({
     }
     ctx.globalAlpha = 1;
     ctx.textAlign = "start";
-    popups = popups.filter((p) => p.ttl > 0);
+    removeWhere(popups, isExpired);
 
-    const effects: PickupType[] = [];
-    if (self && self.flags & ShipFlag.shield) effects.push("shield");
-    if (self && self.flags & ShipFlag.rapid) effects.push("rapid");
-    if (self && self.flags & ShipFlag.homing) effects.push("homing");
-    const scores = sampled.entities
-      .filter((e) => e.kind === "ship")
-      .filter((e) => !(e.flags & ShipFlag.bot))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5)
-      .map((e) => `${(names.get(e.id) ?? "?").padEnd(10).slice(0, 10)} ${e.score}`);
-    const hp = !self
-      ? "-"
-      : self.flags & ShipFlag.dead
-        ? `0 (respawn ${(self.respawn / 10).toFixed(1)}s)`
-        : `${self.hp}`;
-    drawHud(ctx, view, stats, [
-      `tick     ${buffer.latest?.tick ?? 0}`,
-      `hp       ${hp}`,
-      `effects  ${effects.join(", ") || "-"}`,
-      "",
-      ...scores,
-    ]);
+    if (now - hudAt >= HUD_REFRESH_MS) {
+      hud.update(buildHud(sampled.entities, stats), view.dpr);
+      hudAt = now;
+    }
+    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+    ctx.fillStyle = "rgba(20, 8, 36, 0.7)";
+    ctx.fillRect(10, 10, hud.style.width, hud.height + 10);
+    hud.draw(ctx, 10, 10);
     if (options.netgraph) netgraph.draw(ctx, view);
   }
 

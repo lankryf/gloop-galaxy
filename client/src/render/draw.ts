@@ -57,7 +57,8 @@ export interface ExplosionLook {
   readonly ttl: number;
   readonly duration: number;
   readonly color: string;
-  readonly particles: readonly { readonly pos: Point; readonly r: number }[];
+  readonly count: number;
+  readonly particles: readonly { readonly x: number; readonly y: number; readonly r: number }[];
 }
 
 interface Star {
@@ -89,6 +90,37 @@ const DEFAULT_THEME: Pick<Theme, "background" | "planet"> = {
   background: ["#3d1b63", "#140a24"],
   planet: { x: 0.82, y: 0.2, r: 70, color: "#ff7ad9" },
 };
+
+interface CachedBackground {
+  readonly canvas: HTMLCanvasElement;
+  readonly theme: object;
+  readonly pixels: number;
+}
+
+let cachedBackground: CachedBackground | null = null;
+
+export function drawCachedBackground(
+  ctx: Ctx,
+  arena: ArenaSize,
+  view: View,
+  theme: Pick<Theme, "background" | "planet"> = DEFAULT_THEME,
+): void {
+  const pixels = view.scale * view.dpr;
+  if (cachedBackground?.theme !== theme || cachedBackground.pixels !== pixels) {
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(arena.width * pixels);
+    canvas.height = Math.ceil(arena.height * pixels);
+    const off = canvas.getContext("2d");
+    if (!off) {
+      drawBackground(ctx, arena, theme);
+      return;
+    }
+    off.scale(pixels, pixels);
+    drawBackground(off, arena, theme);
+    cachedBackground = { canvas, theme, pixels };
+  }
+  ctx.drawImage(cachedBackground.canvas, 0, 0, arena.width, arena.height);
+}
 
 export function drawBackground(
   ctx: Ctx,
@@ -153,7 +185,10 @@ export function drawSprite(
 ): void {
   const frame = sheet.frames[frameName];
   if (!frame) return;
-  const [sx, sy, sw, sh] = frame;
+  const sx = frame[0];
+  const sy = frame[1];
+  const sw = frame[2];
+  const sh = frame[3];
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
@@ -284,26 +319,31 @@ export function drawShip(
   ctx.restore();
 }
 
+export function hudLines(stats: LoopStats, extra: readonly string[] = []): string[] {
+  return [
+    `steps/s  ${stats.stepsPerSecond}`,
+    `frames/s ${stats.framesPerSecond}`,
+    `frame    ${stats.frameTime.toFixed(2)} ms`,
+    ...extra.filter(Boolean),
+  ];
+}
+
+export function drawPanel(ctx: Ctx, view: View, lines: readonly string[]): void {
+  ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+  ctx.font = "14px ui-monospace, Menlo, monospace";
+  ctx.fillStyle = "rgba(20, 8, 36, 0.7)";
+  ctx.fillRect(10, 10, 190, 20 + lines.length * 18);
+  ctx.fillStyle = GOO;
+  for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i] ?? "", 20, 32 + i * 18);
+}
+
 export function drawHud(
   ctx: Ctx,
   view: View,
   stats: LoopStats,
   extra: readonly string[] = [],
 ): void {
-  ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-  const lines = [
-    `steps/s  ${stats.stepsPerSecond}`,
-    `frames/s ${stats.framesPerSecond}`,
-    `frame    ${stats.frameTime.toFixed(2)} ms`,
-    ...extra.filter(Boolean),
-  ];
-  ctx.font = "14px ui-monospace, Menlo, monospace";
-  ctx.fillStyle = "rgba(20, 8, 36, 0.7)";
-  ctx.fillRect(10, 10, 190, 20 + lines.length * 18);
-  ctx.fillStyle = GOO;
-  lines.forEach((line, i) => {
-    ctx.fillText(line, 20, 32 + i * 18);
-  });
+  drawPanel(ctx, view, hudLines(stats, extra));
 }
 
 export function drawBullet(ctx: Ctx, b: Pose, sprites: Sprites | null = null): void {
@@ -378,9 +418,11 @@ export function drawExplosion(ctx: Ctx, e: ExplosionLook): void {
   ctx.fillStyle = e.color;
   ctx.strokeStyle = INK;
   ctx.lineWidth = 2;
-  for (const p of e.particles) {
+  for (let i = 0; i < e.count; i++) {
+    const p = e.particles[i];
+    if (!p) continue;
     ctx.beginPath();
-    ctx.arc(p.pos.x, p.pos.y, p.r * (0.5 + t), 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, p.r * (0.5 + t), 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
   }

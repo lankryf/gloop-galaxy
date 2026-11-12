@@ -1,0 +1,143 @@
+{
+ "label": "after",
+ "frames": {
+  "count": 1803,
+  "p50": 0.2999999999956344,
+  "p95": 0.7999999999956344,
+  "p99": 1.1999999999970896,
+  "max": 6.600000000005821
+ },
+ "gc": {
+  "MinorGC": {
+   "count": 18,
+   "ms": 23.773
+  },
+  "V8.GC_MC_BACKGROUND_MARKING": {
+   "count": 27,
+   "ms": 42.574000000000005
+  },
+  "MajorGC": {
+   "count": 6,
+   "ms": 20.499000000000002
+  },
+  "V8.GCFinalizeMC": {
+   "count": 6,
+   "ms": 19.558000000000003
+  }
+ },
+ "marks": {
+  "render": {
+   "count": 1944,
+   "p50": 0.3000000000029104,
+   "p95": 0.5999999999912689,
+   "p99": 1,
+   "max": 8.30000000000291
+  },
+  "decode": {
+   "count": 971,
+   "p50": 0,
+   "p95": 0.10000000000582077,
+   "p99": 0.20000000001164153,
+   "max": 0.6999999999970896
+  },
+  "reconcile": {
+   "count": 491,
+   "p50": 0,
+   "p95": 0.10000000000582077,
+   "p99": 0.19999999999708962,
+   "max": 0.5999999999912689
+  },
+  "simulate": {
+   "count": 971,
+   "p50": 0.10000000000582077,
+   "p95": 0.20000000001164153,
+   "p99": 0.3000000000029104,
+   "max": 0.6999999999970896
+  }
+ },
+ "topSelf": [
+  [
+   "drawImage :0",
+   98,
+   0.3
+  ],
+  [
+   "(garbage collector) :0",
+   86,
+   0.3
+  ],
+  [
+   "save :0",
+   47,
+   0.2
+  ],
+  [
+   "requestAnimationFrame :0",
+   44,
+   0.1
+  ],
+  [
+   "mark :0",
+   35,
+   0.1
+  ],
+  [
+   "strokeText :0",
+   32,
+   0.1
+  ],
+  [
+   "render online/game.ts:361",
+   28,
+   0.1
+  ],
+  [
+   "stroke :0",
+   28,
+   0.1
+  ]
+ ],
+ "topAlloc": [
+  [
+   "render online/game.ts:361",
+   5004,
+   18.5
+  ],
+  [
+   "push online/interpolation.ts:32",
+   2261,
+   8.3
+  ],
+  [
+   "sample online/interpolation.ts:52",
+   2099,
+   7.7
+  ],
+  [
+   "draw online/netgraph.ts:54",
+   2092,
+   7.7
+  ],
+  [
+   "next :0",
+   1476,
+   5.4
+  ],
+  [
+   "drawExplosion render/draw.ts:270",
+   1342,
+   4.9
+  ],
+  [
+   "readEntity codec/binary.ts:220",
+   1299,
+   4.8
+  ],
+  [
+   "blendInto online/interpolation.ts:5",
+   969,
+   3.6
+  ]
+ ],
+ "totalAllocKB": 27115
+}

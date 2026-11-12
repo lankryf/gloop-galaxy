@@ -1,34 +1,56 @@
 import { Entity } from "./entity.ts";
+import { cos, sin } from "./fmath.ts";
 import type { Rng } from "./random.ts";
-import { Vector2 } from "./vector.ts";
+import type { Vector2 } from "./vector.ts";
 
 export interface Particle {
-  pos: Vector2;
-  vel: Vector2;
-  readonly r: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  r: number;
+}
+
+export interface ExplosionInit {
+  readonly pos: Vector2;
+  readonly rng: Rng;
+  readonly size?: number;
+  readonly color?: string;
 }
 
 export class Explosion extends Entity {
   readonly kind = "explosion";
   readonly duration = 0.9;
-  readonly color: string;
-  readonly particles: Particle[];
+  readonly particles: Particle[] = [];
+  color = "#8dff3a";
   ttl = 0.9;
+  count = 0;
 
-  constructor({
-    pos,
-    rng,
-    size = 1,
-    color = "#8dff3a",
-  }: { pos: Vector2; rng: Rng; size?: number; color?: string }) {
-    super({ pos });
+  constructor(init: ExplosionInit) {
+    super({ pos: init.pos });
+    this.reset(init);
+  }
+
+  reset({ pos, rng, size = 1, color = "#8dff3a" }: ExplosionInit): this {
+    this.pos = pos;
     this.color = color;
-    const count = Math.round(18 * size);
-    this.particles = Array.from({ length: count }, () => ({
-      pos,
-      vel: Vector2.fromAngle(rng.range(0, Math.PI * 2), rng.range(40, 220) * size),
-      r: rng.range(2, 6) * size,
-    }));
+    this.ttl = this.duration;
+    this.alive = true;
+    this.count = Math.round(18 * size);
+    while (this.particles.length < this.count)
+      this.particles.push({ x: 0, y: 0, vx: 0, vy: 0, r: 0 });
+    for (let i = 0; i < this.count; i++) {
+      const p = this.particles[i];
+      if (!p) continue;
+      const angle = rng.range(0, Math.PI * 2);
+      const speed = rng.range(40, 220) * size;
+      p.x = pos.x;
+      p.y = pos.y;
+      p.vx = cos(angle) * speed;
+      p.vy = sin(angle) * speed;
+      p.r = rng.range(2, 6) * size;
+    }
+    return this;
   }
 
   override update(dt: number): void {
@@ -37,9 +59,13 @@ export class Explosion extends Entity {
       this.alive = false;
       return;
     }
-    for (const p of this.particles) {
-      p.pos = p.pos.add(p.vel.scale(dt));
-      p.vel = p.vel.scale(0.94);
+    for (let i = 0; i < this.count; i++) {
+      const p = this.particles[i];
+      if (!p) continue;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= 0.94;
+      p.vy *= 0.94;
     }
   }
 }

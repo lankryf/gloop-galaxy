@@ -2,7 +2,7 @@ import type { EntitySnap, Snapshot } from "@gloop/shared/protocol.ts";
 import { ARENA } from "@gloop/shared/sim/arena.ts";
 import { lerpAngle, lerpWrapped } from "../render/draw.ts";
 
-const KEEP = 90;
+const KEEP = 30;
 const OFFSET_WINDOW = 90;
 
 export interface Sampled {
@@ -11,16 +11,21 @@ export interface Sampled {
   readonly stale?: boolean;
 }
 
-function blend(prev: EntitySnap, next: EntitySnap, t: number): EntitySnap {
-  const x = lerpWrapped(prev.x, next.x, t, ARENA.width);
-  const y = lerpWrapped(prev.y, next.y, t, ARENA.height);
-  if ("angle" in next && "angle" in prev)
-    return { ...next, x, y, angle: lerpAngle(prev.angle, next.angle, t) };
-  return { ...next, x, y };
+function blendInto(out: EntitySnap, prev: EntitySnap, next: EntitySnap, t: number): EntitySnap {
+  Object.assign(out, next);
+  out.x = lerpWrapped(prev.x, next.x, t, ARENA.width);
+  out.y = lerpWrapped(prev.y, next.y, t, ARENA.height);
+  if ("angle" in out && "angle" in prev && "angle" in next)
+    out.angle = lerpAngle(prev.angle, next.angle, t);
+  return out;
 }
 
 export class SnapshotBuffer {
   #snapshots: Snapshot[] = [];
+  #index = new WeakMap<Snapshot, Map<number, EntitySnap>>();
+  #scratch = new Map<number, EntitySnap>();
+  #out: EntitySnap[] = [];
+  #minOffset = Number.POSITIVE_INFINITY;
   #offsets: number[] = [];
   readonly tickMs: number;
   delayMs: number;
@@ -41,16 +46,19 @@ export class SnapshotBuffer {
     const latest = this.latest;
     if (latest && snapshot.tick <= latest.tick) return false;
     this.#snapshots.push(snapshot);
+    this.#index.set(snapshot, new Map(snapshot.entities.map((e) => [e.id, e])));
     if (this.#snapshots.length > KEEP) this.#snapshots.shift();
     this.#offsets.push(now - snapshot.tick * this.tickMs);
     if (this.#offsets.length > OFFSET_WINDOW) this.#offsets.shift();
+    this.#minOffset = Number.POSITIVE_INFINITY;
+    for (const o of this.#offsets) if (o < this.#minOffset) this.#minOffset = o;
     this.lastReceivedAt = now;
     return true;
   }
 
   serverTick(now: number): number {
     if (this.#offsets.length === 0) return 0;
-    return (now - Math.min(...this.#offsets)) / this.tickMs;
+    return (now - this.#minOffset) / this.tickMs;
   }
 
   renderTick(now: number): number {
@@ -76,16 +84,28 @@ export class SnapshotBuffer {
     const b = list[i + 1];
     if (!a || !b) return { entities: last.entities, tick: last.tick, stale: true };
     const t = (target - a.tick) / (b.tick - a.tick);
-    const before = new Map(a.entities.map((e) => [e.id, e]));
-    const entities: EntitySnap[] = [];
+    const before = this.#index.get(a);
+    const entities = this.#out;
+    entities.length = 0;
     for (const next of b.entities) {
-      const prev = before.get(next.id);
+      const prev = before?.get(next.id);
       if (!prev || prev.kind !== next.kind) {
         if (t > 0.5) entities.push(next);
         continue;
       }
-      entities.push(blend(prev, next, t));
+      let out = this.#scratch.get(next.id);
+      if (!out || out.kind !== next.kind) {
+        out = { ...next };
+        this.#scratch.set(next.id, out);
+      }
+      entities.push(blendInto(out, prev, next, t));
     }
+    if (this.#scratch.size > entities.length * 2 + 64) this.#prune(b);
     return { entities, tick: target };
+  }
+
+  #prune(current: Snapshot): void {
+    const alive = this.#index.get(current);
+    for (const id of this.#scratch.keys()) if (!alive?.has(id)) this.#scratch.delete(id);
   }
 }
