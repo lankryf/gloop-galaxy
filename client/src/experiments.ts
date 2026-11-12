@@ -17,6 +17,7 @@ export interface NetOptions {
   prediction: boolean;
   delayMs: number;
   netgraph: boolean;
+  worker: boolean;
 }
 
 export const netOptions: Readonly<NetOptions> = {
@@ -24,6 +25,7 @@ export const netOptions: Readonly<NetOptions> = {
   prediction: params.get("predict") !== "0",
   delayMs: Number(params.get("delay") ?? 100),
   netgraph: params.get("netgraph") !== "0",
+  worker: params.has("worker"),
 };
 
 export interface GameExperiment {

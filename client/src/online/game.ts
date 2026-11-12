@@ -31,7 +31,7 @@ import type { Loop, LoopStats } from "../loop.ts";
 import { createLoop } from "../loop.ts";
 import type { Connection } from "../net/connection.ts";
 import type { Percentiles } from "../perf.ts";
-import { measure, measures } from "../perf.ts";
+import { measure, measures, Samples } from "../perf.ts";
 import type { View } from "../render/canvas.ts";
 import { beginFrame } from "../render/canvas.ts";
 import type { ShipPose, Sprites } from "../render/draw.ts";
@@ -54,6 +54,7 @@ import type { Netgraph } from "./netgraph.ts";
 import { createNetgraph } from "./netgraph.ts";
 import type { MovingWell, PendingInput } from "./prediction.ts";
 import { Predictor, toWellField } from "./prediction.ts";
+import { WorkerDecoder } from "./worker-decoder.ts";
 
 const REDUNDANCY = 3;
 const DRAW_ORDER: readonly EntitySnap["kind"][] = ["well", "pickup", "asteroid", "bullet", "ship"];
@@ -98,6 +99,7 @@ export interface OnlineGame {
   readonly netgraph: Netgraph;
   readonly shipId: EntityId;
   readonly measures: () => Record<string, Percentiles>;
+  readonly decoding: () => Record<string, Percentiles>;
 }
 
 const isAlive = (ship: ShipSnap | null): ship is ShipSnap =>
@@ -243,9 +245,18 @@ export function startOnlineGame({
     for (const ev of snapshot.events) handleEvent(ev);
   }
 
+  const workerDecoder = options.worker ? new WorkerDecoder(onSnapshot) : null;
+  const directDecode = new Samples();
+
   connection.events.on("binary", (data) => {
+    if (workerDecoder) {
+      workerDecoder.decode(data);
+      return;
+    }
     try {
+      const started = performance.now();
       const snapshot = measure("decode", () => decodeSnapshot(data));
+      directDecode.push(performance.now() - started);
       onSnapshot(snapshot, data.byteLength);
     } catch (error: unknown) {
       console.warn("bad snapshot", messageOf(error));
@@ -548,6 +559,13 @@ export function startOnlineGame({
     buffer,
     netgraph,
     measures,
+    decoding: () =>
+      workerDecoder
+        ? {
+            mainThread: workerDecoder.mainThread.percentiles(),
+            latency: workerDecoder.latency.percentiles(),
+          }
+        : { mainThread: directDecode.percentiles(), latency: directDecode.percentiles() },
     get shipId() {
       return myShip;
     },
