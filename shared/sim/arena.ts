@@ -6,7 +6,8 @@ export interface ArenaSize {
 export const ARENA: ArenaSize = { width: 1600, height: 900 };
 
 export function wrap(value: number, size: number): number {
-  if (value < 0) return value + size;
-  if (value >= size) return value - size;
-  return value;
+  if (value >= 0 && value < size) return value;
+  const r = value % size;
+  const wrapped = r < 0 ? r + size : r;
+  return wrapped < size ? wrapped : 0;
 }
