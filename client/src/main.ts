@@ -282,6 +282,12 @@ function playOnline(
   });
 }
 
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch((error: unknown) => {
+    console.warn("service worker", messageOf(error));
+  });
+}
+
 boot().catch((error: unknown) => {
   console.error(error);
   drawLoading(ctx, view, lastProgress, "Щось зламалось", messageOf(error));

@@ -1,0 +1,32 @@
+services:
+  gloop:
+    build:
+      context: .
+      args:
+        GIT_SHA: ${GIT_SHA:-local}
+        APP_VERSION: ${APP_VERSION:-local}
+    image: gloop-galaxy:local
+    ports:
+      - "8080:8080"
+    environment:
+      LOG_LEVEL: info
+      ALLOWED_ORIGINS: http://localhost:8080
+      MAX_CONNECTIONS_PER_IP: 8
+    volumes:
+      - match-logs:/app/logs
+    stop_grace_period: 10s
+    restart: unless-stopped
+
+  staging:
+    image: gloop-galaxy:local
+    profiles: ["staging"]
+    ports:
+      - "8081:8080"
+    environment:
+      LOG_LEVEL: warn
+      MAX_ROOMS: 300
+      MAX_CONNECTIONS_PER_IP: 2000
+    stop_grace_period: 10s
+
+volumes:
+  match-logs:

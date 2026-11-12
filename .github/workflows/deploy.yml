@@ -1,0 +1,63 @@
+name: deploy
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  image:
+    needs: ci
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.name.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: name
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.name.outputs.image }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            APP_VERSION=${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Image size
+        run: |
+          docker pull "${{ steps.name.outputs.image }}"
+          docker image inspect "${{ steps.name.outputs.image }}" --format '{{.Size}}' | awk '{ printf "image size: %.1f MB\n", $1 / 1000000 }' | tee -a "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: image
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --image "${{ needs.image.outputs.image }}" --strategy rolling
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Check that the live version is this tag
+        run: |
+          for i in $(seq 1 20); do
+            version=$(curl -fsS "https://${{ vars.PUBLIC_HOST }}/health" | jq -r .version) || true
+            echo "live: $version"
+            [ "$version" = "${GITHUB_REF_NAME}" ] && exit 0
+            sleep 6
+          done
+          exit 1

@@ -1,0 +1,17 @@
+.git
+.github
+**/node_modules
+**/dist
+**/coverage
+**/test
+**/scripts
+**/logs
+**/.env
+e2e
+docs
+test-results
+playwright-report
+*.md
+Dockerfile
+compose.yaml
+fly.toml
