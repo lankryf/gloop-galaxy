@@ -91,6 +91,7 @@ export function drawShip(ctx, ship, time) {
   ctx.save();
   ctx.translate(ship.x, ship.y);
   ctx.rotate(ship.angle);
+  ctx.scale(1.5, 1.5);
 
   if (ship.thrust) {
     const flicker = 10 + Math.sin(time * 0.05) * 6;
@@ -138,7 +139,7 @@ export function drawHud(ctx, view, stats, extra = []) {
     `steps/s  ${stats.stepsPerSecond}`,
     `frames/s ${stats.framesPerSecond}`,
     `frame    ${stats.frameTime.toFixed(2)} ms`,
-    ...extra,
+    ...extra.filter(Boolean),
   ];
   ctx.font = "14px ui-monospace, Menlo, monospace";
   ctx.fillStyle = "rgba(20, 8, 36, 0.7)";
