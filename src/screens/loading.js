@@ -1,6 +1,6 @@
 const ICONS = { pending: "…", ok: "✓", failed: "✗" };
 
-export function drawLoading(ctx, view, progress, title = "Завантаження") {
+export function drawLoading(ctx, view, progress, title = "Завантаження", detail = "") {
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   ctx.fillStyle = "#12091f";
   ctx.fillRect(0, 0, view.width, view.height);
@@ -20,6 +20,10 @@ export function drawLoading(ctx, view, progress, title = "Завантаженн
   ctx.fillRect(x + 4, y + 20, (w - 8) * share, 18);
 
   ctx.font = "14px ui-monospace, Menlo, monospace";
+  if (detail) {
+    ctx.fillStyle = "#ff5c5c";
+    ctx.fillText(detail.slice(0, 80), x, y + 290);
+  }
   ctx.fillStyle = "#f4e9ff";
   ctx.fillText(`${progress.done} / ${progress.total}  ${Math.round(share * 100)}%`, x, y + 66);
 

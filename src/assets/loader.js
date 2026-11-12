@@ -2,6 +2,13 @@ import { HttpError, withRetry } from "./retry.js";
 
 const REQUEST_TIMEOUT = 8000;
 
+function logRetry(url) {
+  return ({ attempt, wait, error }) =>
+    console.warn(
+      `retry ${url}: attempt ${attempt} failed (${error.message}), next in ${Math.round(wait)} ms`,
+    );
+}
+
 function requestSignal(signal) {
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT);
   return signal ? AbortSignal.any([signal, timeout]) : timeout;
@@ -24,7 +31,7 @@ export async function fetchJson(url, { signal } = {}) {
 }
 
 export function loadJson(url, { signal } = {}) {
-  return withRetry(() => fetchJson(url, { signal }), { signal });
+  return withRetry(() => fetchJson(url, { signal }), { signal, onRetry: logRetry(url) });
 }
 
 export function loadImage(url, { signal } = {}) {
@@ -34,7 +41,7 @@ export function loadImage(url, { signal } = {}) {
       const blob = await response.blob();
       return createImageBitmap(blob);
     },
-    { signal },
+    { signal, onRetry: logRetry(url) },
   );
 }
 
@@ -45,7 +52,7 @@ export function loadAudio(audioContext, url, { signal } = {}) {
       const data = await response.arrayBuffer();
       return audioContext.decodeAudioData(data);
     },
-    { signal },
+    { signal, onRetry: logRetry(url) },
   );
 }
 
@@ -79,24 +86,34 @@ export function buildJobs(manifest, audioContext) {
 }
 
 export async function loadAll(jobs, { onProgress, signal, sequential = false } = {}) {
+  const inner = new AbortController();
+  const linked = signal ? AbortSignal.any([signal, inner.signal]) : inner.signal;
+  let finished = false;
   const status = jobs.map((job) => ({ name: `${job.group}/${job.name}`, state: "pending" }));
-  const report = () =>
+  const report = () => {
+    if (finished) return;
     onProgress?.({
       done: status.filter((s) => s.state !== "pending").length,
       total: jobs.length,
       status,
     });
+  };
   report();
 
   const run = async (job, i) => {
     try {
-      const value = await job.load(signal);
+      const value = await job.load(linked);
       status[i].state = "ok";
       return { job, value };
     } catch (error) {
-      if (job.required || signal?.aborted) throw error;
       status[i].state = "failed";
       status[i].error = error.message;
+      if (job.required || linked.aborted) {
+        report();
+        finished = true;
+        inner.abort(error);
+        throw error;
+      }
       return { job, value: null, error };
     } finally {
       report();

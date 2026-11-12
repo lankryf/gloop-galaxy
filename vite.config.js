@@ -23,7 +23,7 @@ function testingMiddleware() {
         }
 
         if (url.searchParams.has("flaky")) {
-          const key = url.pathname;
+          const key = url.search;
           flaky.set(key, (flaky.get(key) ?? 0) + 1);
           if (flaky.get(key) <= 2) {
             res.statusCode = 503;
@@ -40,5 +40,6 @@ function testingMiddleware() {
 const flaky = new Map();
 
 export default defineConfig({
+  appType: "mpa",
   plugins: [testingMiddleware()],
 });

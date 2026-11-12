@@ -14,6 +14,7 @@ const overlay = document.getElementById("overlay");
 const { ctx, view } = setupCanvas(canvas, ARENA);
 const input = createInput(window);
 const audio = createAudio();
+let lastProgress = { done: 0, total: 0, status: [] };
 
 function actions(buttons) {
   const box = document.createElement("div");
@@ -47,8 +48,7 @@ async function loadAssets(manifest) {
   if (failMode === "abort")
     setTimeout(() => controller.abort(new DOMException("Cancelled by player", "AbortError")), 700);
 
-  let progress = { done: 0, total: 0, status: [] };
-  const draw = () => drawLoading(ctx, view, progress);
+  const draw = () => drawLoading(ctx, view, lastProgress);
   const jobs = buildJobs(manifest, audio.context);
   const started = performance.now();
   try {
@@ -56,7 +56,7 @@ async function loadAssets(manifest) {
       signal: controller.signal,
       sequential,
       onProgress: (p) => {
-        progress = p;
+        lastProgress = p;
         draw();
       },
     });
@@ -74,12 +74,10 @@ async function loadWithRetry() {
       const manifest = applyFailMode(await loadJson("/assets/manifest.json"));
       return { manifest, assets: await loadAssets(manifest) };
     } catch (error) {
-      const reason =
-        error.name === "AbortError"
-          ? "Завантаження скасовано"
-          : `Не вдалося завантажити: ${error.message}`;
-      console.warn(reason);
-      drawLoading(ctx, view, { done: 0, total: 0, status: [] }, reason);
+      const cancelled = error.name === "AbortError";
+      const title = cancelled ? "Завантаження скасовано" : "Не вдалося завантажити гру";
+      console.warn(title, error.message);
+      drawLoading(ctx, view, lastProgress, title, cancelled ? "" : error.message);
       await waitForClick("Спробувати ще раз");
     }
   }
@@ -106,6 +104,10 @@ function pickRoom() {
 async function boot() {
   const { manifest, assets } = await loadWithRetry();
   audio.setBuffers(assets.sounds);
+  if (assets.failures.length > 0) {
+    drawLoading(ctx, view, lastProgress, "Частина файлів не завантажилась");
+    await waitForClick("Грати без них");
+  }
 
   const sprites = {};
   for (const [name, image] of Object.entries(assets.sprites)) {

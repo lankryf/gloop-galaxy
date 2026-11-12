@@ -26,10 +26,8 @@ export function sleep(ms, signal) {
 }
 
 function isRetryable(error) {
-  if (error.name === "AbortError" || error.name === "TimeoutError") return false;
   if (error instanceof HttpError) return error.status >= 500;
-  if (error instanceof SyntaxError) return false;
-  return true;
+  return error instanceof TypeError;
 }
 
 export async function withRetry(

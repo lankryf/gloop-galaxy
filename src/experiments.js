@@ -54,7 +54,7 @@ export function applyFailMode(manifest) {
   if (failMode === "timeout")
     m.sprites.asteroids.url = withQuery(m.sprites.asteroids.url, "delay=12000");
   if (failMode === "json") m.arenas.junkyard = withQuery(m.arenas.junkyard, "corrupt");
-  if (failMode === "flaky") m.sounds.shoot = withQuery(m.sounds.shoot, "flaky");
+  if (failMode === "flaky") m.sounds.shoot = withQuery(m.sounds.shoot, `flaky=${Date.now()}`);
   if (failMode === "abort") {
     for (const sheet of Object.values(m.sprites)) sheet.url = withQuery(sheet.url, "delay=3000");
   }
