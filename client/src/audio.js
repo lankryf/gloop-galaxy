@@ -20,6 +20,7 @@ export function createAudio() {
 
   return {
     context,
+    play,
     setBuffers(sounds) {
       for (const [name, buffer] of Object.entries(sounds)) buffers.set(name, buffer);
     },

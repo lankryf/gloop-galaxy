@@ -1,12 +1,21 @@
+import { ARENAS } from "@gloop/shared/arenas.js";
 import { ARENA } from "@gloop/shared/sim/arena.js";
 import { buildJobs, loadAll, loadJson } from "./assets/loader.js";
 import { createAudio } from "./audio.js";
-import { applyFailMode, failMode, gameExperiment, probe, sequential } from "./experiments.js";
+import {
+  applyFailMode,
+  failMode,
+  gameExperiment,
+  netOptions,
+  offline,
+  sequential,
+} from "./experiments.js";
 import { startGame } from "./game.js";
 import { createInput } from "./input.js";
 import { Lobby } from "./lobby/lobby.js";
 import { mountLobby } from "./lobby/view.js";
 import { Connection, socketUrl } from "./net/connection.js";
+import { startOnlineGame } from "./online/game.js";
 import { setupCanvas } from "./render/canvas.js";
 import { drawLoading } from "./screens/loading.js";
 import { mountChat } from "./ui/chat.js";
@@ -86,7 +95,7 @@ async function loadWithRetry() {
 }
 
 function pickRoom(message = "") {
-  if (probe) return Promise.resolve({ room: { arena: "nebula" }, name: "probe" });
+  if (offline) return Promise.resolve({ room: { arena: "nebula" }, name: "probe" });
   const lobby = new Lobby();
   const panel = document.createElement("div");
   overlay.replaceChildren(panel);
@@ -113,14 +122,16 @@ function joinRoom(room, name) {
   return new Promise((resolve, reject) => {
     const controller = new AbortController();
     const { signal } = controller;
-    connection.addEventListener("open", () => connection.send("join", { room: room.id, name }), {
-      signal,
-    });
+    connection.addEventListener(
+      "open",
+      () => connection.send("join", { room: room.id, name, codec: netOptions.codec }),
+      { signal },
+    );
     connection.addEventListener(
       "welcome",
       (e) => {
         controller.abort();
-        resolve({ connection, you: e.detail.you });
+        resolve({ connection, you: e.detail.you, welcome: e.detail });
       },
       { signal },
     );
@@ -151,7 +162,7 @@ async function enterRoom() {
   let message = "";
   for (;;) {
     const { room, name } = await pickRoom(message);
-    if (probe) return { room, name, session: null };
+    if (offline) return { room, name, session: null };
     try {
       const session = await joinRoom(room, name);
       return { room, name, session };
@@ -179,32 +190,44 @@ async function boot() {
   const { room, name, session } = await enterRoom();
   await audio.unlock().catch(() => {});
 
-  const arena = assets.arenas[room.arena];
-  const game = startGame({
+  const theme = assets.arenas[room.arena];
+
+  if (!session) {
+    const game = startGame({
+      ctx,
+      view,
+      input,
+      audio,
+      sprites,
+      arena: { ...theme, ...ARENAS[room.arena] },
+      pilot: name,
+      experiment: gameExperiment(),
+    });
+    for (const f of assets.failures) game.hud.note(`Не завантажилось ${f.name}: ${f.error}`, 8);
+    return;
+  }
+
+  const { connection } = session;
+  let you = session.you;
+  connection.addEventListener("welcome", (e) => {
+    you = e.detail.you;
+  });
+  connection.addEventListener("open", () =>
+    connection.send("join", { room: room.id, name, codec: netOptions.codec }),
+  );
+  mountChat(overlay, connection, { you: () => you });
+  const online = startOnlineGame({
     ctx,
     view,
     input,
     audio,
     sprites,
-    arena,
-    pilot: name,
-    experiment: gameExperiment(),
+    theme,
+    connection,
+    welcome: session.welcome,
+    options: { ...netOptions },
   });
-  for (const f of assets.failures) game.hud.note(`Не завантажилось ${f.name}: ${f.error}`, 8);
-
-  if (session) {
-    let you = session.you;
-    session.connection.addEventListener("welcome", (e) => {
-      you = e.detail.you;
-    });
-    session.connection.addEventListener("open", () =>
-      session.connection.send("join", { room: room.id, name }),
-    );
-    session.connection.addEventListener("shutdown", () =>
-      game.hud.note("Сервер перезапускається", 6),
-    );
-    mountChat(overlay, session.connection, { you: () => you });
-  }
+  window.gloop = online;
 }
 
 boot();

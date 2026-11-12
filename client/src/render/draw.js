@@ -85,7 +85,7 @@ function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
-function lerpWrapped(a, b, t, size) {
+export function lerpWrapped(a, b, t, size) {
   let d = b - a;
   if (d > size / 2) d -= size;
   if (d < -size / 2) d += size;
@@ -123,6 +123,17 @@ function drawFlame(ctx, time) {
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+}
+
+export function drawName(ctx, name, x, y, own) {
+  ctx.font = "bold 15px sans-serif";
+  ctx.textAlign = "center";
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = INK;
+  ctx.fillStyle = own ? GOO : "#f4e9ff";
+  ctx.strokeText(name, x, y - 42);
+  ctx.fillText(name, x, y - 42);
+  ctx.textAlign = "start";
 }
 
 export function drawShip(ctx, ship, time, own = true, sprites = null) {
@@ -213,6 +224,21 @@ export function drawBullet(ctx, b, sprites = null) {
   ctx.stroke();
 }
 
+const shapes = new Map();
+
+function shapeFor(id) {
+  let shape = shapes.get(id);
+  if (!shape) {
+    let seed = id * 2654435761;
+    shape = Array.from({ length: 11 }, () => {
+      seed = (seed * 16807) % 2147483647;
+      return 0.78 + (seed / 2147483647) * 0.34;
+    });
+    shapes.set(id, shape);
+  }
+  return shape;
+}
+
 export function drawAsteroid(ctx, a, p, sprites = null) {
   if (sprites?.asteroids) {
     const frame = `${a.hunter ? "hunter" : "rock"}${a.id % 4}`;
@@ -226,10 +252,11 @@ export function drawAsteroid(ctx, a, p, sprites = null) {
   ctx.strokeStyle = INK;
   ctx.lineWidth = 4;
   ctx.beginPath();
-  const n = a.shape.length;
+  const shape = a.shape ?? shapeFor(a.id);
+  const n = shape.length;
   for (let i = 0; i < n; i++) {
     const ang = (i / n) * Math.PI * 2;
-    const r = a.radius * a.shape[i];
+    const r = a.radius * shape[i];
     if (i === 0) ctx.moveTo(Math.cos(ang) * r, Math.sin(ang) * r);
     else ctx.lineTo(Math.cos(ang) * r, Math.sin(ang) * r);
   }

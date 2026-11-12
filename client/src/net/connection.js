@@ -14,6 +14,8 @@ export class Connection extends EventTarget {
     this.maxDelay = maxDelay;
     this.status = "idle";
     this.last = new Map();
+    this.bytesIn = 0;
+    this.bytesOut = 0;
   }
 
   #emit(type, detail) {
@@ -33,6 +35,7 @@ export class Connection extends EventTarget {
   #open() {
     this.#setStatus("connecting");
     const ws = new WebSocket(this.url);
+    ws.binaryType = "arraybuffer";
     this.#ws = ws;
 
     ws.addEventListener("open", () => {
@@ -43,6 +46,12 @@ export class Connection extends EventTarget {
     });
 
     ws.addEventListener("message", (event) => {
+      if (event.data instanceof ArrayBuffer) {
+        this.bytesIn += event.data.byteLength;
+        this.#emit("binary", event.data);
+        return;
+      }
+      this.bytesIn += event.data.length;
       let msg;
       try {
         msg = JSON.parse(event.data);
@@ -75,17 +84,23 @@ export class Connection extends EventTarget {
   }
 
   #flush() {
-    while (this.#queue.length > 0 && this.#ws?.readyState === WebSocket.OPEN) {
-      this.#ws.send(this.#queue.shift());
-    }
+    while (this.#queue.length > 0 && this.open) this.sendRaw(this.#queue.shift());
+  }
+
+  get open() {
+    return this.#ws?.readyState === WebSocket.OPEN;
+  }
+
+  sendRaw(data) {
+    if (!this.open) return false;
+    this.bytesOut += typeof data === "string" ? data.length : data.byteLength;
+    this.#ws.send(data);
+    return true;
   }
 
   send(type, payload = {}) {
     const data = JSON.stringify({ v: 0, type, ...payload });
-    if (this.#ws?.readyState === WebSocket.OPEN) {
-      this.#ws.send(data);
-      return;
-    }
+    if (this.sendRaw(data)) return;
     this.#queue.push(data);
     if (this.#queue.length > this.maxQueue) this.#queue.shift();
   }
@@ -100,5 +115,9 @@ export class Connection extends EventTarget {
 
 export function socketUrl(path = "/ws") {
   const scheme = location.protocol === "https:" ? "wss" : "ws";
-  return `${scheme}://${location.host}${path}`;
+  const page = new URLSearchParams(location.search);
+  const query = new URLSearchParams();
+  for (const key of ["lag", "jitter", "drop"]) if (page.has(key)) query.set(key, page.get(key));
+  const suffix = query.size > 0 ? `?${query}` : "";
+  return `${scheme}://${location.host}${path}${suffix}`;
 }

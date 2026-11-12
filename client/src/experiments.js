@@ -5,6 +5,13 @@ export const probe = params.has("probe");
 export const failMode = params.get("fail") ?? "";
 export const sequential = params.has("sequential");
 export const slow = params.has("slow");
+export const offline = params.has("offline") || probe || experiment !== "";
+export const netOptions = {
+  codec: params.get("codec") === "json" ? "json" : "binary",
+  prediction: params.get("predict") !== "0",
+  delayMs: Number(params.get("delay") ?? 100),
+  netgraph: params.get("netgraph") !== "0",
+};
 
 export function busyWait(ms) {
   const end = performance.now() + ms;
