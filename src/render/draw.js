@@ -18,7 +18,13 @@ function makeStars(width, height, count) {
 
 let stars = null;
 
-export function drawBackground(ctx, arena) {
+const DEFAULT_THEME = {
+  background: ["#3d1b63", "#140a24"],
+  planet: { x: 0.82, y: 0.2, r: 70, color: "#ff7ad9" },
+};
+
+export function drawBackground(ctx, arena, theme = DEFAULT_THEME) {
+  const [inner, outer] = theme.background;
   const g = ctx.createRadialGradient(
     arena.width * 0.3,
     arena.height * 0.3,
@@ -27,8 +33,8 @@ export function drawBackground(ctx, arena) {
     arena.height / 2,
     arena.width,
   );
-  g.addColorStop(0, "#3d1b63");
-  g.addColorStop(1, "#140a24");
+  g.addColorStop(0, inner);
+  g.addColorStop(1, outer);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, arena.width, arena.height);
 
@@ -42,22 +48,35 @@ export function drawBackground(ctx, arena) {
   }
   ctx.globalAlpha = 1;
 
-  ctx.fillStyle = "#ff7ad9";
+  const { x, y, r, color } = theme.planet;
+  const px = arena.width * x;
+  const py = arena.height * y;
+  ctx.fillStyle = color;
   ctx.strokeStyle = INK;
   ctx.lineWidth = 6;
   ctx.beginPath();
-  ctx.arc(arena.width * 0.82, arena.height * 0.2, 70, 0, Math.PI * 2);
+  ctx.arc(px, py, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = "#d94fb6";
+  ctx.fillStyle = "rgba(26, 11, 38, 0.18)";
   ctx.beginPath();
-  ctx.arc(arena.width * 0.8, arena.height * 0.22, 18, 0, Math.PI * 2);
-  ctx.arc(arena.width * 0.85, arena.height * 0.16, 10, 0, Math.PI * 2);
+  ctx.arc(px - r * 0.3, py + r * 0.2, r * 0.26, 0, Math.PI * 2);
+  ctx.arc(px + r * 0.35, py - r * 0.3, r * 0.14, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.strokeStyle = "rgba(141, 255, 58, 0.25)";
   ctx.lineWidth = 3;
   ctx.strokeRect(0, 0, arena.width, arena.height);
+}
+
+export function drawSprite(ctx, sheet, frameName, x, y, angle = 0, scale = 1) {
+  const [sx, sy, sw, sh] = sheet.frames[frameName];
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.scale(scale, scale);
+  ctx.drawImage(sheet.image, sx, sy, sw, sh, -sw / 2, -sh / 2, sw, sh);
+  ctx.restore();
 }
 
 function lerp(a, b, t) {
@@ -90,7 +109,32 @@ export function interpolateShip(ship, alpha, arena) {
   return { ...interpolate(ship, alpha, arena), thrust: ship.thrust };
 }
 
-export function drawShip(ctx, ship, time, own = true) {
+function drawFlame(ctx, time) {
+  const flicker = 10 + Math.sin(time * 0.05) * 6;
+  ctx.fillStyle = "#ffd23f";
+  ctx.strokeStyle = "#ff7a00";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-14, -6);
+  ctx.lineTo(-30 - flicker, 0);
+  ctx.lineTo(-14, 6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+export function drawShip(ctx, ship, time, own = true, sprites = null) {
+  if (sprites?.ships) {
+    ctx.save();
+    ctx.translate(ship.x, ship.y);
+    ctx.rotate(ship.angle);
+    ctx.scale(1.5, 1.5);
+    if (ship.thrust) drawFlame(ctx, time);
+    ctx.restore();
+    drawSprite(ctx, sprites.ships, own ? "player" : "dummy", ship.x, ship.y, ship.angle);
+    return;
+  }
+
   ctx.save();
   ctx.translate(ship.x, ship.y);
   ctx.rotate(ship.angle);
@@ -153,7 +197,11 @@ export function drawHud(ctx, view, stats, extra = []) {
   });
 }
 
-export function drawBullet(ctx, b) {
+export function drawBullet(ctx, b, sprites = null) {
+  if (sprites?.items) {
+    drawSprite(ctx, sprites.items, "bullet", b.x, b.y, b.angle, 0.8);
+    return;
+  }
   ctx.fillStyle = GOO;
   ctx.strokeStyle = INK;
   ctx.lineWidth = 2;
@@ -163,7 +211,12 @@ export function drawBullet(ctx, b) {
   ctx.stroke();
 }
 
-export function drawAsteroid(ctx, a, p) {
+export function drawAsteroid(ctx, a, p, sprites = null) {
+  if (sprites?.asteroids) {
+    const frame = `${a.hunter ? "hunter" : "rock"}${a.id % 4}`;
+    drawSprite(ctx, sprites.asteroids, frame, p.x, p.y, a.hunter ? 0 : p.angle, a.radius / 52);
+    return;
+  }
   ctx.save();
   ctx.translate(p.x, p.y);
   ctx.rotate(p.angle);
@@ -207,8 +260,12 @@ export function drawExplosion(ctx, e) {
 const PICKUP_COLORS = { shield: "#4fd8ff", rapid: "#ffd23f", homing: "#ff7ad9" };
 const PICKUP_LETTERS = { shield: "S", rapid: "R", homing: "H" };
 
-export function drawPickup(ctx, p) {
+export function drawPickup(ctx, p, sprites = null) {
   const bob = Math.sin(p.age * 3) * 4;
+  if (sprites?.items) {
+    drawSprite(ctx, sprites.items, p.type, p.pos.x, p.pos.y + bob, 0, p.radius / 20);
+    return;
+  }
   ctx.save();
   ctx.translate(p.pos.x, p.pos.y + bob);
   ctx.fillStyle = PICKUP_COLORS[p.type];

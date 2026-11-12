@@ -2,12 +2,13 @@ import { findCollisions } from "./collision.js";
 import { createRng } from "./random.js";
 import { resolveCollisions } from "./rules.js";
 
-export class World {
+export class World extends EventTarget {
   #entities = new Map();
   #pending = [];
   #stepping = false;
 
   constructor({ seed = 1, detect = findCollisions } = {}) {
+    super();
     this.rng = createRng(seed);
     this.time = 0;
     this.detect = detect;
@@ -16,6 +17,10 @@ export class World {
 
   later(delay, action) {
     this.timers.push({ at: this.time + delay, action });
+  }
+
+  emit(type, detail) {
+    this.dispatchEvent(new CustomEvent(type, { detail }));
   }
 
   spawn(entity) {

@@ -98,6 +98,7 @@ export class Ship extends Entity {
       bullet.behaviors.push(homing({ targetKind: "ship", ignoreId: this.id, turnRate: 4 }));
     }
     world.spawn(bullet);
+    world.emit("fired", { shipId: this.id, x: nose.x, y: nose.y });
     this.cooldown = this.effects.has("rapid") ? SHIP.rapidCooldown : SHIP.fireCooldown;
   }
 
