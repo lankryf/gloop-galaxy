@@ -5,7 +5,7 @@ describe("loadConfig", () => {
   test("empty env gives defaults", () => {
     const config = loadConfig({});
     expect(config.port).toBe(8080);
-    expect(config.maxPlayersPerRoom).toBe(8);
+    expect(config.maxPlayersPerRoom).toBe(16);
     expect(config.demoEndpoints).toBe(false);
   });
 

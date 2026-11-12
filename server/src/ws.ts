@@ -95,6 +95,9 @@ export function attachSockets(
     room.on("leave", () =>
       broadcast(room, encodeServerMessage("roster", { players: room.roster })),
     );
+    room.on("roster", () =>
+      broadcast(room, encodeServerMessage("roster", { players: room.roster })),
+    );
     room.on("chat", (message) =>
       broadcast(room, encodeServerMessage("chat", message), { critical: false }),
     );

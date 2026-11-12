@@ -13,7 +13,7 @@ const EnvSchema = z.object({
   LOG_DIR: text("logs"),
   STATIC_DIR: text("../client/dist"),
   MAX_ROOMS: int(50, 1, 1000),
-  MAX_PLAYERS_PER_ROOM: int(8, 1, 64),
+  MAX_PLAYERS_PER_ROOM: int(16, 1, 64),
   MESSAGES_PER_SECOND: int(20, 1, 1000),
   JOIN_TIMEOUT_MS: int(5000, 100, 600_000),
   HEARTBEAT_MS: int(15000, 100, 600_000),

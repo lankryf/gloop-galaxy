@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import type { ArenaName } from "@gloop/shared/arenas.ts";
 import type { EntityId } from "@gloop/shared/ids.ts";
 import type { RoomInfo } from "@gloop/shared/protocol.ts";
+import { Bot } from "./bot.ts";
 import type { MatchEvent } from "./log/events.ts";
 import { startMatchLog } from "./log/matchlog.ts";
 import type { Logger } from "./logger.ts";
@@ -21,6 +22,7 @@ export interface Player {
   readonly id: string;
   readonly name: string;
   readonly send: Deliver;
+  readonly bot?: boolean;
   shipId: EntityId | null;
 }
 
@@ -39,6 +41,7 @@ type RoomEvents = {
   chat: [ChatMessage];
   event: [MatchEvent];
   empty: [Room];
+  roster: [];
   closed: [];
 };
 
@@ -117,7 +120,13 @@ export class Room extends EventEmitter<RoomEvents> {
     this.players.delete(playerId);
     this.emit("leave", player);
     this.emit("event", { t: Date.now(), room: this.id, type: "leave", player: playerId, reason });
-    if (this.players.size === 0) this.emit("empty", this);
+    if (this.humans === 0) this.emit("empty", this);
+  }
+
+  get humans(): number {
+    let count = 0;
+    for (const p of this.players.values()) if (!p.bot) count += 1;
+    return count;
   }
 
   chat(playerId: string, text: string): void {
@@ -136,6 +145,7 @@ export class Room extends EventEmitter<RoomEvents> {
 export class RoomManager {
   #rooms = new Map<string, Room>();
   #nextId = 1;
+  #nextBot = 0;
   readonly maxRooms: number;
   readonly maxPlayersPerRoom: number;
   readonly logDir: string;
@@ -176,6 +186,7 @@ export class RoomManager {
       room.match.start();
     });
     room.on("empty", () => {
+      for (const p of room.players.values()) if (p.bot) room.players.delete(p.id);
       room.match?.stop();
       room.match = null;
       room.endMatch();
@@ -201,6 +212,28 @@ export class RoomManager {
       .finally(() => this.matchLogs.delete(tracked));
     this.matchLogs.add(tracked);
     this.logger.info("match log started", { room: room.id, file });
+  }
+
+  addBots(id: string, count: number): Room {
+    const room = this.#rooms.get(id);
+    if (!room) throw new RoomError("no_room", "No such room");
+    if (room.players.size + count > room.maxPlayers)
+      throw new RoomError("room_full", "Not enough seats");
+    for (let i = 0; i < count; i++) {
+      const index = this.#nextBot++;
+      const bot = new Bot(`bot-${index}`, index);
+      const player: Player = {
+        id: bot.playerId,
+        name: bot.name,
+        send: () => {},
+        bot: true,
+        shipId: null,
+      };
+      room.join(player);
+      if (room.match) player.shipId = room.match.addBot(player, bot);
+    }
+    room.emit("roster");
+    return room;
   }
 
   get(id: string): Room | undefined {

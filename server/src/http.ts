@@ -26,6 +26,8 @@ const MIME: Readonly<Record<string, string>> = {
 
 const MAX_BODY = 4 * 1024;
 
+const AddBotsSchema = z.object({ count: z.number().int().min(1).max(16) });
+
 const NewRoomSchema = z.object({
   name: z
     .string()
@@ -162,6 +164,14 @@ async function route(
       return json(res, 201, rooms.create(body.data).info);
     }
     throw new HttpError(405, "Method not allowed");
+  }
+
+  const bots = url.pathname.match(/^\/api\/rooms\/([^/]+)\/bots$/);
+  if (bots?.[1]) {
+    if (req.method !== "POST") throw new HttpError(405, "Method not allowed");
+    const body = AddBotsSchema.safeParse(await readJsonBody(req));
+    if (!body.success) throw new HttpError(400, body.error.issues[0]?.message ?? "Invalid count");
+    return json(res, 201, rooms.addBots(bots[1], body.data.count).info);
   }
 
   if (url.pathname === "/api/stats" && req.method === "GET") {

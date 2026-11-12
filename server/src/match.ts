@@ -20,6 +20,7 @@ import { Ship } from "@gloop/shared/sim/ship.ts";
 import { Vector2 } from "@gloop/shared/sim/vector.ts";
 import { GravityWell } from "@gloop/shared/sim/well.ts";
 import { World } from "@gloop/shared/sim/world.ts";
+import type { Bot } from "./bot.ts";
 import type { Deliver, Player, Room } from "./rooms.ts";
 
 const MAX_QUEUE = 8;
@@ -126,6 +127,7 @@ export class Match {
   readonly room: Room;
   readonly world: World;
   readonly players = new Map<string, Entry>();
+  readonly bots = new Map<string, Bot>();
   tick: Tick = tick(0);
 
   constructor({ room }: { room: Room }) {
@@ -181,7 +183,13 @@ export class Match {
     return ship.id;
   }
 
+  addBot(player: Player, bot: Bot): EntityId {
+    this.bots.set(player.id, bot);
+    return this.addPlayer(player, { codec: "binary", send: () => {} });
+  }
+
   removePlayer(playerId: string): void {
+    this.bots.delete(playerId);
     const entry = this.players.get(playerId);
     if (!entry) return;
     entry.ship.alive = false;
@@ -236,6 +244,10 @@ export class Match {
   }
 
   step(): void {
+    for (const [id, bot] of this.bots) {
+      const ship = this.players.get(id)?.ship;
+      if (ship) this.receiveInputs(id, [bot.think(this.world, ship)]);
+    }
     for (const entry of this.players.values()) {
       for (let n = 0; n < MAX_INPUTS_PER_TICK; n++) {
         const input = entry.queue.shift();
@@ -258,7 +270,8 @@ export class Match {
     };
     this.#events = [];
     let encoded: ArrayBuffer | null = null;
-    for (const entry of this.players.values()) {
+    for (const [id, entry] of this.players) {
+      if (this.bots.has(id)) continue;
       if (entry.codec === "json") {
         entry.send(jsonCodec.encodeSnapshot({ ...snapshot, ack: entry.lastSeq }), {
           kind: "snapshot",
