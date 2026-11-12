@@ -552,3 +552,77 @@ GIF двох вікон – на початку README.
 | кадри без знімка | 100% | 37% | 1,3% | 0% | 0% |
 
 Я обрав 100 мс (3 тіки): це запас на розкид у 30 мс і на один загублений знімок. 66 мс майже вистачає, але при кожній втраті чужі кораблі на мить зупиняються. Плата за 100 мс – чужі кораблі показані на ~100 мс у минулому, тобто стріляти треба трохи на випередження. Компенсацію затримки на сервері (lag compensation) не робив.
+
+## Лаба 6. TypeScript: типи для протоколу, симуляції і обох боків з'єднання
+
+Увесь код (shared, server, client) тепер на TypeScript під `strict` + `noUncheckedIndexedAccess` + `verbatimModuleSyntax` + `erasableSyntaxOnly`. Сервер запускається без збирання: Node 22 сам вирізає типи (`node src/index.ts`), тому ніяких `enum` і parameter properties. Клієнт збирає Vite, а перевіряє `tsc`.
+
+### Що зроблено
+
+- `tsconfig.base.json` у корені, у кожному пакеті свій `tsconfig.json`. `npm run typecheck` у корені проганяє `tsc` у всіх трьох пакетах (≈2 с).
+- `shared/protocol.ts` – єдине джерело правди: zod-схеми всіх JSON-повідомлень в обидва боки, типи виведені з них через `z.infer`. `parseClientMessage` / `parseServerMessage` повертають `Result` і ніколи не кидають. Ручний валідатор із лаби 4 (`server/src/protocol.js`) видалено.
+- Бінарний кодек типізований, декодер перевіряє версію, довжину, діапазони id/tick/seq і індекси типів, на помилці кидає `CodecError`. JSON і бінарний формат – дві реалізації інтерфейсу `Codec`.
+- Кожен `switch` по `type` чи `kind` закінчується `assertNever`.
+- Брендовані `EntityId`, `Tick`, `Seq`; `Vector2` з `readonly x, y`; знімки `readonly`.
+- `Room` – це `EventEmitter<RoomEvents>`, у клієнті й симуляції – власний `Bus<Events>`. Конфіг сервера читається з env через zod-схему з дефолтами.
+- Усі `catch` отримують `unknown`, повідомлення дістає `messageOf(error)`.
+- `any` – нуль, `as` – нуль (крім `as const`).
+- Тест детермінізму зелений: хеш сценарію на 1000 кроків той самий `192f27b8`, тобто поведінка симуляції після перекладу не змінилася.
+- `.github/workflows/ci.yml`: `npm ci`, typecheck, lint, тести і збирання на кожен push.
+
+$${\color{red}\text{СКРІНШОТ: після push на GitHub відкрити вкладку Actions → останній запуск ci → зробити скріншот зеленого запуску}}$$
+$${\color{red}\text{і зберегти як docs/img/lab06-ci.png, потім замінити цей рядок на ![CI](docs/img/lab06-ci.png)}}$$
+
+### Що знайшов TypeScript
+
+1. **Невідомий бонус ламав клієнт.** Сервер кодував тип бонусу як `PICKUPS.indexOf(type)`. Для невідомого типу це `-1`, а `setUint8(-1)` записує 255. Клієнт робив `PICKUPS[255].toUpperCase()` і падав. `noUncheckedIndexedAccess` не дав написати це без перевірки, тепер декодер на такому байті кидає `CodecError`.
+2. **Влучання в астероїд втрачало стрільця.** Правило `asteroid|bullet` відправляло подію `hit` з полем `ownerId`, а сервер при пакуванні читав `d.shipId`, тобто завжди 0. Коли події стали типом `WorldEvents`, поле, якого немає, просто не скомпілювалося.
+3. **Відповідь `POST /api/rooms` не перевірялась.** `Lobby.create` повертав `await response.json()` як кімнату, якою б вона не була. Тепер це `fetchJson(url, RoomSchema)`.
+4. **Помилка в `catch` вважалась `Error`.** У лобі й завантаженні було `error.message` і `error.name`, хоча `fetch` при скасуванні кидає `DOMException`, а `withRetry` міг отримати будь-що. Тепер усюди `unknown` і `messageOf`.
+5. **Подвійний `Map.get`.** `connection.last.get("roster").players` – TypeScript не вірить, що другий `get` поверне те саме, що перший. Замінив на типізоване поле `lastRoster`.
+6. **Новий бонус показав би `undefined`.** У HUD назви бонусів були об'єктом `{ shield, rapid, homing }`. Додай четвертий тип – і над кораблем з'явиться напис «undefined». Тепер це `Record<PickupType, string>`, і без назви для нового типу проєкт не збирається.
+7. **`undefined <= 2` у vite-конфігу.** Мідлвар `?flaky` порівнював `flaky.get(key) <= 2`; працювало, бо перед цим був `set`, але порядок рядків ніхто не гарантує.
+
+Номери 1, 3, 4 і 7 – це не «помилки типів» у звичному сенсі, а забуті перевірки на `undefined` і на чужі дані. Саме вони найчастіше й виявлялись.
+
+### Три типи, які варто пояснити
+
+**1. Брендовані id** (`shared/ids.ts`):
+
+```ts
+declare const brand: unique symbol;
+export type Brand<T, B extends string> = T & { readonly [brand]: B };
+export type EntityId = Brand<number, "EntityId">;
+export type Tick = Brand<number, "Tick">;
+```
+
+Під час виконання це звичайне число. Але для компілятора `EntityId` і `Tick` – різні типи, і передати номер тіку туди, де чекають id корабля, не вийде. Отримати `EntityId` можна лише через перевірку `isEntityId(n)` або `entityId(n)`, яка кидає `RangeError`. До лаби 6 у `Match` поля `a` і `b` у подіях означали то id корабля, то очки, то індекс бонусу, і переплутати було дуже легко.
+
+**2. Розмічене об'єднання знімків сутностей** (`EntitySnapSchema` у `shared/protocol.ts`):
+
+```ts
+export type EntitySnap = z.infer<typeof EntitySnapSchema>;
+
+switch (e.kind) {
+  case "ship": ...
+  case "well": ...
+  default: assertNever(e);
+}
+```
+
+`EntitySnap` – це «або корабель, або куля, або астероїд, або бонус, або діра», і в кожного свій набір полів. Після `case "well"` TypeScript знає, що `e` – діра, і дозволяє `e.timeLeft`, а `e.hp` ні. `assertNever(e: never)` у `default` компілюється лише тоді, коли всі варіанти розібрані: коли в лабі 3 з'явились діри, усі `switch` я шукав вручну, а тепер компілятор сам показує кожен.
+
+**3. Типізована шина подій** (`shared/bus.ts`):
+
+```ts
+export class Bus<Events extends Record<string, unknown>> {
+  on<K extends keyof Events>(type: K, handler: (detail: Events[K]) => void): () => void
+  emit<K extends keyof Events>(type: K, detail: Events[K]): void
+}
+```
+
+`Events` – це словник «назва події → що в ній лежить». `K extends keyof Events` означає «одна з назв», а `Events[K]` – «тип даних саме цієї події». Тому `connection.events.on("pong", ({ t }) => …)` знає, що в `pong` є `t`, а `emit("hit", { size: 1 })` не скомпілюється, бо в `hit` немає `size`. У `Connection` словник подій навіть не написаний руками: `{ [K in ServerMessageType]: ServerMessageOf<K> }` будує його з zod-схеми протоколу.
+
+### Фреймворк
+
+Не брав. Лобі – це список кімнат, форма і кнопка, разом із чатом близько 370 рядків DOM-коду, і після переходу на `Bus` з типами подій він став зрозумілим. React чи Svelte дав би декларативний рендер списку кімнат, але додав би ще один рантайм у бандл (зараз 163 кБ, 52 кБ gzip, більшість – zod) і ще один шар збирання, а гра однаково малюється на canvas у власному циклі. Якщо в лабі 8 інтерфейс розростеться (налаштування, таблиця рекордів), повернуся до цього питання.
