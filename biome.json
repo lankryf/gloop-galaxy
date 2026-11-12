@@ -6,7 +6,15 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/node_modules", "!**/logs", "!**/*.md", "!**/coverage"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/node_modules",
+      "!**/logs",
+      "!**/*.md",
+      "!**/coverage",
+      "!**/*.cpuprofile"
+    ]
   },
   "formatter": {
     "indentStyle": "space",
