@@ -52,7 +52,7 @@ export function createNetgraph(): Netgraph {
   };
   let presetIndex = 0;
   const panel = new TextPanel({
-    width: 250,
+    width: 280,
     lineHeight: 17,
     font: "12px ui-monospace, Menlo, monospace",
     color: "#8dff3a",
@@ -82,7 +82,7 @@ export function createNetgraph(): Netgraph {
       return PRESETS[presetIndex] ?? PRESETS[0];
     },
     draw(ctx, view) {
-      const w = 250;
+      const w = 280;
       const now = performance.now();
       if (now - builtAt >= 250) {
         panel.update(build(), view.dpr);
