@@ -16,6 +16,7 @@ export class Entity {
     this.collidable = radius > 0;
     this.prevPos = pos;
     this.prevAngle = angle;
+    this.behaviors = [];
   }
 
   get id() {

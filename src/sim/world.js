@@ -11,6 +11,11 @@ export class World {
     this.rng = createRng(seed);
     this.time = 0;
     this.detect = detect;
+    this.timers = [];
+  }
+
+  later(delay, action) {
+    this.timers.push({ at: this.time + delay, action });
   }
 
   spawn(entity) {
@@ -46,7 +51,9 @@ export class World {
     this.#stepping = true;
     for (const entity of this.#entities.values()) entity.remember();
     for (const entity of this.#entities.values()) {
-      if (entity.alive) entity.update(dt, this);
+      if (!entity.alive) continue;
+      entity.update(dt, this);
+      for (const behavior of entity.behaviors) behavior(entity, this, dt);
     }
     resolveCollisions(this, this.detect(this.#entities.values()));
     this.#sweep();
@@ -54,6 +61,15 @@ export class World {
     for (const entity of this.#pending) this.#entities.set(entity.id, entity);
     this.#pending.length = 0;
     this.time += dt;
+    this.#runTimers();
+  }
+
+  #runTimers() {
+    if (this.timers.length === 0) return;
+    const due = this.timers.filter((t) => t.at <= this.time);
+    if (due.length === 0) return;
+    this.timers = this.timers.filter((t) => t.at > this.time);
+    for (const t of due) t.action(this);
   }
 
   findSafeSpot(radius, arena, tries = 30) {

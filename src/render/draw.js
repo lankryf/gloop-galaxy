@@ -167,7 +167,7 @@ export function drawAsteroid(ctx, a, p) {
   ctx.save();
   ctx.translate(p.x, p.y);
   ctx.rotate(p.angle);
-  ctx.fillStyle = "#7a6a8f";
+  ctx.fillStyle = a.hunter ? "#9c5a7a" : "#7a6a8f";
   ctx.strokeStyle = INK;
   ctx.lineWidth = 4;
   ctx.beginPath();
@@ -181,7 +181,7 @@ export function drawAsteroid(ctx, a, p) {
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = "#5b4d70";
+  ctx.fillStyle = a.hunter ? "#ff5c5c" : "#5b4d70";
   ctx.beginPath();
   ctx.arc(a.radius * 0.3, -a.radius * 0.2, a.radius * 0.22, 0, Math.PI * 2);
   ctx.arc(-a.radius * 0.35, a.radius * 0.25, a.radius * 0.14, 0, Math.PI * 2);
@@ -202,4 +202,34 @@ export function drawExplosion(ctx, e) {
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
+}
+
+const PICKUP_COLORS = { shield: "#4fd8ff", rapid: "#ffd23f", homing: "#ff7ad9" };
+const PICKUP_LETTERS = { shield: "S", rapid: "R", homing: "H" };
+
+export function drawPickup(ctx, p) {
+  const bob = Math.sin(p.age * 3) * 4;
+  ctx.save();
+  ctx.translate(p.pos.x, p.pos.y + bob);
+  ctx.fillStyle = PICKUP_COLORS[p.type];
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = INK;
+  ctx.font = "bold 20px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(PICKUP_LETTERS[p.type], 0, 1);
+  ctx.restore();
+}
+
+export function drawShield(ctx, p) {
+  ctx.strokeStyle = "rgba(79, 216, 255, 0.8)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 40, 0, Math.PI * 2);
+  ctx.stroke();
 }

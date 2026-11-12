@@ -1,3 +1,4 @@
+import { homing } from "./behaviors.js";
 import { Entity } from "./entity.js";
 import { Vector2 } from "./vector.js";
 
@@ -18,6 +19,11 @@ export class Asteroid extends Entity {
     const radius = rng.range(20, 55);
     const pos = new Vector2(rng.range(0, arena.width), rng.range(0, arena.height));
     const vel = Vector2.fromAngle(rng.range(0, Math.PI * 2), rng.range(25, 90));
-    return new Asteroid({ pos, vel, radius, rng });
+    const asteroid = new Asteroid({ pos, vel, radius, rng });
+    if (rng.next() < 0.2) {
+      asteroid.hunter = true;
+      asteroid.behaviors.push(homing({ targetKind: "ship", turnRate: 0.6, range: 380 }));
+    }
+    return asteroid;
   }
 }

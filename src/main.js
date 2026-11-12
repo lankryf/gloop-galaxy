@@ -8,12 +8,15 @@ import {
   drawBullet,
   drawExplosion,
   drawHud,
+  drawPickup,
+  drawShield,
   drawShip,
   interpolate,
   interpolateShip,
 } from "./render/draw.js";
 import { ARENA } from "./sim/arena.js";
 import { Asteroid } from "./sim/asteroid.js";
+import { Pickup } from "./sim/pickup.js";
 import { Ship } from "./sim/ship.js";
 import { Vector2 } from "./sim/vector.js";
 import { World } from "./sim/world.js";
@@ -27,6 +30,7 @@ const ship = world.spawn(new Ship({ pos: new Vector2(ARENA.width / 2, ARENA.heig
 const dummy = world.spawn(new Ship({ pos: new Vector2(300, 200), angle: 0, name: "dummy" }));
 dummy.controls = { thrust: true, left: true, right: false, fire: false };
 for (let i = 0; i < 6; i++) world.spawn(Asteroid.random(world.rng, ARENA));
+for (let i = 0; i < 2; i++) world.spawn(Pickup.random(world, ARENA));
 
 let simTime = 0;
 let reported = false;
@@ -63,15 +67,20 @@ function render(alpha, stats) {
   beginFrame(ctx, view);
   drawBackground(ctx, ARENA);
   for (const a of world.ofKind("asteroid")) drawAsteroid(ctx, a, interpolate(a, alpha, ARENA));
+  for (const p of world.ofKind("pickup")) drawPickup(ctx, p);
   for (const b of world.ofKind("bullet")) drawBullet(ctx, interpolate(b, alpha, ARENA));
   for (const s of world.ofKind("ship")) {
-    if (!s.dead) drawShip(ctx, interpolateShip(s, alpha, ARENA), performance.now(), s === ship);
+    if (s.dead) continue;
+    const p = interpolateShip(s, alpha, ARENA);
+    drawShip(ctx, p, performance.now(), s === ship);
+    if (s.effects.has("shield")) drawShield(ctx, p);
   }
   for (const e of world.ofKind("explosion")) drawExplosion(ctx, e);
   drawHud(ctx, view, stats, [
     `jitter   ${stats.jitter.toFixed(2)} ms`,
     `entities ${world.size}`,
     `score    ${ship.score}`,
+    `effects  ${[...ship.effects.keys()].join(", ") || "-"}`,
     `hp       ${ship.hp}${ship.dead ? ` (respawn ${ship.respawnIn.toFixed(1)}s)` : ""}`,
     experiment ? `exp      ${experiment}` : "",
   ]);

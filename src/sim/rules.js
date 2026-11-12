@@ -1,6 +1,7 @@
 import { ARENA } from "./arena.js";
 import { Asteroid } from "./asteroid.js";
 import { Explosion } from "./explosion.js";
+import { Pickup } from "./pickup.js";
 
 const SCORE = { asteroid: 10, ship: 100 };
 
@@ -56,6 +57,13 @@ const handlers = {
     if (ship.damage(20)) {
       world.spawn(new Explosion({ pos: ship.pos, rng: world.rng, size: 1.4 }));
     }
+  },
+
+  "pickup|ship"(world, pickup, ship) {
+    if (ship.dead) return;
+    pickup.alive = false;
+    ship.applyPickup(pickup.type);
+    world.later(6, (w) => w.spawn(Pickup.random(w, ARENA)));
   },
 
   "asteroid|asteroid"(_world, a, b) {

@@ -1,6 +1,8 @@
 import { ARENA, wrap } from "./arena.js";
+import { homing } from "./behaviors.js";
 import { BULLET, Bullet } from "./bullet.js";
 import { Entity } from "./entity.js";
+import { EFFECT_DURATION } from "./pickup.js";
 import { Vector2 } from "./vector.js";
 
 export const SHIP = {
@@ -11,6 +13,7 @@ export const SHIP = {
   radius: 22,
   maxHp: 100,
   fireCooldown: 0.18,
+  rapidCooldown: 0.07,
   respawnDelay: 2,
 };
 
@@ -54,6 +57,7 @@ export class Ship extends Entity {
     this.deaths = 0;
     this.dead = false;
     this.respawnIn = 0;
+    this.effects = new Map();
   }
 
   get hp() {
@@ -61,11 +65,12 @@ export class Ship extends Entity {
   }
 
   damage(amount) {
-    if (this.dead) return false;
+    if (this.dead || this.effects.has("shield")) return false;
     this.#hp = Math.max(0, this.#hp - amount);
     if (this.#hp > 0) return false;
     this.dead = true;
     this.collidable = false;
+    this.effects.clear();
     this.deaths += 1;
     this.respawnIn = SHIP.respawnDelay;
     return true;
@@ -81,14 +86,27 @@ export class Ship extends Entity {
     this.collidable = true;
   }
 
+  applyPickup(type) {
+    this.effects.set(type, EFFECT_DURATION[type]);
+  }
+
   fire(world) {
     const nose = this.pos.add(Vector2.fromAngle(this.angle, this.radius + 8));
     const vel = this.vel.add(Vector2.fromAngle(this.angle, BULLET.speed));
-    world.spawn(new Bullet({ pos: nose, vel, ownerId: this.id }));
-    this.cooldown = SHIP.fireCooldown;
+    const bullet = new Bullet({ pos: nose, vel, ownerId: this.id });
+    if (this.effects.has("homing")) {
+      bullet.behaviors.push(homing({ targetKind: "ship", ignoreId: this.id, turnRate: 4 }));
+    }
+    world.spawn(bullet);
+    this.cooldown = this.effects.has("rapid") ? SHIP.rapidCooldown : SHIP.fireCooldown;
   }
 
   update(dt, world) {
+    for (const [type, left] of this.effects) {
+      if (left - dt <= 0) this.effects.delete(type);
+      else this.effects.set(type, left - dt);
+    }
+
     if (this.dead) {
       this.respawnIn -= dt;
       if (this.respawnIn <= 0) this.respawn(world);
