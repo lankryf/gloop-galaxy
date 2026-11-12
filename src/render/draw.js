@@ -78,13 +78,16 @@ export function lerpAngle(a, b, t) {
   return a + d * t;
 }
 
-export function interpolateShip(prev, curr, alpha, arena) {
+export function interpolate(entity, alpha, arena) {
   return {
-    x: lerpWrapped(prev.x, curr.x, alpha, arena.width),
-    y: lerpWrapped(prev.y, curr.y, alpha, arena.height),
-    angle: lerpAngle(prev.angle, curr.angle, alpha),
-    thrust: curr.thrust,
+    x: lerpWrapped(entity.prevPos.x, entity.pos.x, alpha, arena.width),
+    y: lerpWrapped(entity.prevPos.y, entity.pos.y, alpha, arena.height),
+    angle: lerpAngle(entity.prevAngle, entity.angle, alpha),
   };
+}
+
+export function interpolateShip(ship, alpha, arena) {
+  return { ...interpolate(ship, alpha, arena), thrust: ship.thrust };
 }
 
 export function drawShip(ctx, ship, time) {

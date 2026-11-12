@@ -4,14 +4,14 @@ import { createLoop } from "./loop.js";
 import { beginFrame, setupCanvas } from "./render/canvas.js";
 import { drawBackground, drawHud, drawShip, interpolateShip } from "./render/draw.js";
 import { ARENA } from "./sim/arena.js";
-import { createShip, integrate } from "./sim/ship.js";
+import { Ship } from "./sim/ship.js";
+import { Vector2 } from "./sim/vector.js";
 
 const canvas = document.getElementById("game");
 const { ctx, view } = setupCanvas(canvas, ARENA);
 const input = createInput(window);
 
-let previous = createShip(ARENA.width / 2, ARENA.height / 2);
-let current = previous;
+const ship = new Ship({ pos: new Vector2(ARENA.width / 2, ARENA.height / 2) });
 let simTime = 0;
 let reported = false;
 let frameCount = 0;
@@ -26,15 +26,16 @@ function readControls() {
 }
 
 function simulate(dt) {
-  previous = current;
-  current = integrate(current, readControls(), dt);
+  ship.remember();
+  ship.controls = readControls();
+  ship.update(dt);
   simTime += dt;
   input.endStep();
 
   if (probe && !reported && simTime >= 5 - 1e-9) {
     reported = true;
     console.log(
-      `probe t=${simTime.toFixed(4)} x=${current.x.toFixed(3)} y=${current.y.toFixed(3)} steps=${loop.stats.totalSteps + 1}`,
+      `probe t=${simTime.toFixed(4)} x=${ship.pos.x.toFixed(3)} y=${ship.pos.y.toFixed(3)} steps=${loop.stats.totalSteps + 1}`,
     );
   }
 }
@@ -45,7 +46,7 @@ function render(alpha, stats) {
 
   beginFrame(ctx, view);
   drawBackground(ctx, ARENA);
-  drawShip(ctx, interpolateShip(previous, current, alpha, ARENA), performance.now());
+  drawShip(ctx, interpolateShip(ship, alpha, ARENA), performance.now());
   drawHud(ctx, view, stats, [
     `jitter   ${stats.jitter.toFixed(2)} ms`,
     experiment ? `exp      ${experiment}` : "",
