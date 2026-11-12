@@ -144,13 +144,7 @@ export function createHandler({ rooms, config, logger, startedAt = Date.now() })
 
       const replay = url.pathname.match(/^\/api\/replays\/([^/]+)$/);
       if (replay && req.method === "GET") {
-        return await streamReplay(
-          req,
-          res,
-          config.logDir,
-          replay[1],
-          url.searchParams.has("buffered"),
-        );
+        return await streamReplay(res, config.logDir, replay[1], url.searchParams.has("buffered"));
       }
 
       if (url.pathname === "/api/slow" && config.demoEndpoints) {
