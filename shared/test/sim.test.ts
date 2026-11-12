@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import { entityId } from "../ids.ts";
 import { ARENA } from "../sim/arena.ts";
 import { hashWorld } from "../sim/hash.ts";

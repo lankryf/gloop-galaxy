@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import * as binary from "../codec/binary.ts";
 import { entityId, seq, tick } from "../ids.ts";
 import type { Snapshot } from "../protocol.ts";
