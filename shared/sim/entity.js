@@ -2,11 +2,10 @@ import { ARENA, wrap } from "./arena.js";
 import { Vector2 } from "./vector.js";
 
 export class Entity {
-  static #nextId = 1;
-  #id;
+  #id = 0;
 
-  constructor({ kind, pos = new Vector2(), vel = new Vector2(), angle = 0, radius = 0 }) {
-    this.#id = Entity.#nextId++;
+  constructor({ kind, pos = new Vector2(), vel = new Vector2(), angle = 0, radius = 0, id = 0 }) {
+    this.#id = id;
     this.kind = kind;
     this.pos = pos;
     this.vel = vel;
@@ -21,6 +20,11 @@ export class Entity {
 
   get id() {
     return this.#id;
+  }
+
+  assignId(id) {
+    if (this.#id !== 0) throw new Error(`Entity already has id ${this.#id}`);
+    this.#id = id;
   }
 
   remember() {

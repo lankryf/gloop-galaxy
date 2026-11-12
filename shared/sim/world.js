@@ -7,6 +7,7 @@ export class World extends EventTarget {
   #entities = new Map();
   #pending = [];
   #stepping = false;
+  #nextId = 1;
 
   constructor({ seed = 1, detect = findCollisions, systems = [applyGravity] } = {}) {
     super();
@@ -25,7 +26,17 @@ export class World extends EventTarget {
     this.dispatchEvent(new CustomEvent(type, { detail }));
   }
 
+  #allocateId() {
+    for (let i = 0; i < 0xffff; i++) {
+      const id = this.#nextId;
+      this.#nextId = this.#nextId >= 0xffff ? 1 : this.#nextId + 1;
+      if (!this.#entities.has(id) && !this.#pending.some((e) => e.id === id)) return id;
+    }
+    throw new Error("No free entity ids");
+  }
+
   spawn(entity) {
+    if (entity.id === 0) entity.assignId(this.#allocateId());
     if (this.#stepping) this.#pending.push(entity);
     else this.#entities.set(entity.id, entity);
     return entity;
@@ -64,6 +75,7 @@ export class World extends EventTarget {
     }
     for (const system of this.systems) system(this, dt);
     resolveCollisions(this, this.detect(this.#entities.values()));
+    for (const entity of this.#entities.values()) entity.settle?.();
     this.#sweep();
     this.#stepping = false;
     for (const entity of this.#pending) this.#entities.set(entity.id, entity);

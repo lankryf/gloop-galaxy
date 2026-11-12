@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "workspaces": [
+    "shared",
     "client",
     "server"
   ],
@@ -15,7 +16,7 @@
     "dev:server": "npm run dev -w server",
     "build": "npm run build -w client",
     "start": "npm start -w server",
-    "test": "npm test -w server",
+    "test": "npm test --workspaces --if-present",
     "lint": "biome check .",
     "format": "biome check --write ."
   },

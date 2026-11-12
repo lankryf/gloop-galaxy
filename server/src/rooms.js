@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { mkdirSync } from "node:fs";
 import { startMatchLog } from "./log/matchlog.js";
+import { Match } from "./match.js";
 
 export const ARENAS = ["nebula", "junkyard"];
 
@@ -21,6 +22,7 @@ export class Room extends EventEmitter {
     this.persistent = persistent;
     this.players = new Map();
     this.createdAt = Date.now();
+    this.match = null;
   }
 
   get info() {
@@ -38,7 +40,11 @@ export class Room extends EventEmitter {
   }
 
   get roster() {
-    return [...this.players.values()].map((p) => ({ id: p.id, name: p.name }));
+    return [...this.players.values()].map((p) => ({
+      id: p.id,
+      name: p.name,
+      shipId: p.shipId ?? 0,
+    }));
   }
 
   #record(type, data = {}) {
@@ -96,9 +102,14 @@ export class RoomManager extends EventEmitter {
     this.#rooms.set(id, room);
 
     room.on("join", () => {
-      if (room.players.size === 1) this.#startLog(room);
+      if (room.players.size !== 1) return;
+      this.#startLog(room);
+      room.match = new Match({ room, logger: this.logger });
+      room.match.start();
     });
     room.on("empty", () => {
+      room.match?.stop();
+      room.match = null;
       room.endMatch();
       if (!room.persistent) this.delete(id);
     });
@@ -137,6 +148,12 @@ export class RoomManager extends EventEmitter {
     this.logger.info("room deleted", { room: id });
   }
 
+  stats() {
+    const matches = [];
+    for (const room of this.#rooms.values()) if (room.match) matches.push(room.match.stats);
+    return matches;
+  }
+
   list() {
     return [...this.#rooms.values()].map((r) => r.info);
   }
@@ -149,6 +166,7 @@ export class RoomManager extends EventEmitter {
 
   async closeAll() {
     for (const room of this.#rooms.values()) {
+      room.match?.stop();
       if (room.players.size > 0) room.endMatch();
     }
     await Promise.allSettled([...this.matchLogs]);

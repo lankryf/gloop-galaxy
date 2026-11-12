@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { CodecError, decodeInput, messageType } from "@gloop/shared/codec/binary.js";
+import { MessageType, TICK_RATE } from "@gloop/shared/protocol.js";
 import { WebSocket } from "ws";
 import { CloseCode, encode, parseClientMessage } from "./protocol.js";
 import { TokenBucket } from "./ratelimit.js";
@@ -18,7 +20,33 @@ export function send(ws, data, { critical = true } = {}) {
 }
 
 function broadcast(room, data, options) {
-  for (const player of room.players.values()) send(player.socket, data, options);
+  for (const player of room.players.values()) player.send(data, options);
+}
+
+function createNetsim() {
+  const settings = { lag: 0, jitter: 0, drop: 0 };
+  return {
+    settings,
+    set({ lag, jitter, drop }) {
+      Object.assign(settings, { lag, jitter, drop });
+    },
+    run(fn, { droppable = false } = {}) {
+      if (droppable && settings.drop > 0 && Math.random() < settings.drop) return;
+      const delay = settings.lag + Math.random() * settings.jitter;
+      if (delay <= 0) fn();
+      else setTimeout(fn, delay);
+    },
+  };
+}
+
+function netsimFromUrl(url) {
+  const params = new URL(url, "http://localhost").searchParams;
+  const clamp = (value, max) => (Number.isFinite(value) ? Math.min(max, Math.max(0, value)) : 0);
+  return {
+    lag: clamp(Number(params.get("lag") ?? 0), 1000),
+    jitter: clamp(Number(params.get("jitter") ?? 0), 1000),
+    drop: clamp(Number(params.get("drop") ?? 0), 0.5),
+  };
 }
 
 export function attachSockets(wss, { rooms, config, logger }) {
@@ -28,7 +56,6 @@ export function attachSockets(wss, { rooms, config, logger }) {
     if (wired.has(room)) return;
     wired.add(room);
     const sendRoster = () => broadcast(room, encode("roster", { players: room.roster }));
-    room.on("join", sendRoster);
     room.on("leave", sendRoster);
     room.on("chat", (message) => broadcast(room, encode("chat", message), { critical: false }));
   }
@@ -46,18 +73,26 @@ export function attachSockets(wss, { rooms, config, logger }) {
   }, config.heartbeatMs);
 
   wss.on("connection", (ws, req) => {
+    const netsim = createNetsim();
+    if (config.demoEndpoints) netsim.set(netsimFromUrl(req.url));
+
     const state = {
       player: null,
       room: null,
+      codec: "binary",
       bucket: new TokenBucket({
         ratePerSecond: config.messagesPerSecond,
         burst: config.messagesPerSecond * 2,
       }),
-      address: req.socket.remoteAddress,
+      inputBucket: new TokenBucket({ ratePerSecond: TICK_RATE * 2, burst: TICK_RATE * 3 }),
       closing: false,
     };
     ws.state = state;
     ws.missedPongs = 0;
+
+    const deliver = (data, { critical = true, kind = "control" } = {}) => {
+      netsim.run(() => send(ws, data, { critical }), { droppable: kind === "snapshot" });
+    };
 
     ws.on("pong", () => {
       ws.missedPongs = 0;
@@ -88,44 +123,80 @@ export function attachSockets(wss, { rooms, config, logger }) {
       const room = rooms.get(msg.room);
       if (!room) return reject(CloseCode.noRoom, "no such room");
       if (room.isFull) return reject(CloseCode.roomFull, "room is full");
-      const player = { id: randomUUID().slice(0, 8), name: msg.name, socket: ws };
+      const player = { id: randomUUID().slice(0, 8), name: msg.name, socket: ws, send: deliver };
       wire(room);
       clearTimeout(joinTimer);
       state.player = player;
       state.room = room;
-      send(
-        ws,
+      state.codec = msg.codec ?? "binary";
+      room.join(player);
+      const ship = room.match.addPlayer(player, { codec: state.codec, send: deliver });
+      player.shipId = ship.id;
+      deliver(
         encode("welcome", {
           you: player.id,
-          room: { ...room.info, players: room.players.size + 1 },
+          shipId: ship.id,
+          room: room.info,
+          codec: state.codec,
+          tickRate: TICK_RATE,
+          netsim: netsim.settings,
         }),
       );
-      room.join(player);
+      broadcast(room, encode("roster", { players: room.roster }));
       logger.info("player joined", { room: room.id, player: player.id, name: player.name });
     }
 
-    ws.on("message", (data, isBinary) => {
-      if (state.closing) return;
+    function handleInputs(inputs) {
+      if (!state.player) return reject(CloseCode.badMessage, "join first");
+      if (!state.inputBucket.take()) return reject(CloseCode.rateLimited, "too many inputs");
+      const { room, player } = state;
+      netsim.run(() => room.match?.receiveInputs(player.id, inputs), { droppable: true });
+    }
+
+    function handleText(msg) {
+      if (msg.type === "input") return handleInputs(msg.inputs);
       if (!state.bucket.take()) return reject(CloseCode.rateLimited, "too many messages");
-      if (isBinary) return reject(CloseCode.badMessage, "binary messages are not supported yet");
-
-      const { msg, error } = parseClientMessage(data);
-      if (error) return reject(CloseCode.badMessage, error);
-
       switch (msg.type) {
         case "join":
           return handleJoin(msg);
         case "chat":
           if (!state.player) return reject(CloseCode.badMessage, "join first");
           return state.room.chat(state.player.id, msg.text);
+        case "ping":
+          return netsim.run(() => deliver(encode("pong", { t: msg.t })));
+        case "netsim":
+          if (!config.demoEndpoints) return reject(CloseCode.badMessage, "netsim is disabled");
+          netsim.set(msg);
+          return deliver(encode("netsim", netsim.settings));
         case "leave":
           return ws.close(CloseCode.normal, "bye");
       }
+    }
+
+    ws.on("message", (data, isBinary) => {
+      if (state.closing) return;
+      if (!isBinary) {
+        const { msg, error } = parseClientMessage(data);
+        if (error) return reject(CloseCode.badMessage, error);
+        return handleText(msg);
+      }
+      if (messageType(data) !== MessageType.input) {
+        return reject(CloseCode.badMessage, "unknown binary message");
+      }
+      let inputs;
+      try {
+        inputs = decodeInput(data);
+      } catch (error) {
+        if (error instanceof CodecError) return reject(CloseCode.badMessage, error.message);
+        throw error;
+      }
+      handleInputs(inputs);
     });
 
     ws.on("close", (code) => {
       clearTimeout(joinTimer);
       if (state.player) {
+        state.room.match?.removePlayer(state.player.id);
         state.room.leave(state.player.id, code === CloseCode.normal ? "left" : `closed ${code}`);
         logger.info("player left", { room: state.room.id, player: state.player.id, code });
       }

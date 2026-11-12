@@ -138,6 +138,10 @@ export function createHandler({ rooms, config, logger, startedAt = Date.now() })
         throw new HttpError(405, "Method not allowed");
       }
 
+      if (url.pathname === "/api/stats" && req.method === "GET") {
+        return json(res, 200, { matches: rooms.stats(), memory: process.memoryUsage().rss });
+      }
+
       if (url.pathname === "/api/replays" && req.method === "GET") {
         return json(res, 200, await listReplays(config.logDir));
       }

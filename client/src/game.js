@@ -1,3 +1,10 @@
+import { ARENA } from "@gloop/shared/sim/arena.js";
+import { Asteroid } from "@gloop/shared/sim/asteroid.js";
+import { Pickup } from "@gloop/shared/sim/pickup.js";
+import { Ship } from "@gloop/shared/sim/ship.js";
+import { Vector2 } from "@gloop/shared/sim/vector.js";
+import { GravityWell } from "@gloop/shared/sim/well.js";
+import { World } from "@gloop/shared/sim/world.js";
 import { createHud } from "./hud.js";
 import { createLoop } from "./loop.js";
 import { beginFrame } from "./render/canvas.js";
@@ -14,13 +21,6 @@ import {
   interpolate,
   interpolateShip,
 } from "./render/draw.js";
-import { ARENA } from "./sim/arena.js";
-import { Asteroid } from "./sim/asteroid.js";
-import { Pickup } from "./sim/pickup.js";
-import { Ship } from "./sim/ship.js";
-import { Vector2 } from "./sim/vector.js";
-import { GravityWell } from "./sim/well.js";
-import { World } from "./sim/world.js";
 
 export function startGame({ ctx, view, input, audio, sprites, arena, pilot, experiment = {} }) {
   const world = new World({ seed: arena.seed });

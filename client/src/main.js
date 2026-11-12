@@ -1,3 +1,4 @@
+import { ARENA } from "@gloop/shared/sim/arena.js";
 import { buildJobs, loadAll, loadJson } from "./assets/loader.js";
 import { createAudio } from "./audio.js";
 import { applyFailMode, failMode, gameExperiment, probe, sequential } from "./experiments.js";
@@ -8,7 +9,6 @@ import { mountLobby } from "./lobby/view.js";
 import { Connection, socketUrl } from "./net/connection.js";
 import { setupCanvas } from "./render/canvas.js";
 import { drawLoading } from "./screens/loading.js";
-import { ARENA } from "./sim/arena.js";
 import { mountChat } from "./ui/chat.js";
 
 const canvas = document.getElementById("game");

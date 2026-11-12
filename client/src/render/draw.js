@@ -1,4 +1,4 @@
-import { wrap } from "../sim/arena.js";
+import { wrap } from "@gloop/shared/sim/arena.js";
 
 const GOO = "#8dff3a";
 const INK = "#1a0b26";

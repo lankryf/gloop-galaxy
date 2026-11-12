@@ -2,6 +2,7 @@ import { ARENA, wrap } from "./arena.js";
 import { homing } from "./behaviors.js";
 import { BULLET, Bullet } from "./bullet.js";
 import { Entity } from "./entity.js";
+import { gravityAt, wellFields } from "./gravity.js";
 import { EFFECT_DURATION } from "./pickup.js";
 import { Vector2 } from "./vector.js";
 
@@ -44,12 +45,41 @@ export function integrate(ship, input, dt) {
   return { x, y, vx, vy, angle, thrust: Boolean(input.thrust) };
 }
 
+export function quantizeAngle(angle) {
+  let a = angle % (Math.PI * 2);
+  if (a > Math.PI) a -= Math.PI * 2;
+  if (a <= -Math.PI) a += Math.PI * 2;
+  return Math.round(a * 10000) / 10000;
+}
+
+export function quantizeShip(state) {
+  return {
+    ...state,
+    x: Math.fround(state.x),
+    y: Math.fround(state.y),
+    vx: Math.fround(state.vx),
+    vy: Math.fround(state.vy),
+    angle: quantizeAngle(state.angle),
+  };
+}
+
+export function shipPhysics(state, input, dt, wells) {
+  const next = integrate(state, input, dt);
+  if (wells.length > 0) {
+    const { ax, ay } = gravityAt(next.x, next.y, wells);
+    next.vx += ax * dt;
+    next.vy += ay * dt;
+  }
+  return quantizeShip(next);
+}
+
 export class Ship extends Entity {
   #hp = SHIP.maxHp;
 
-  constructor({ pos, angle = -Math.PI / 2, name = "pilot" }) {
-    super({ kind: "ship", pos, angle, radius: SHIP.radius });
+  constructor({ pos, angle = -Math.PI / 2, name = "pilot", inputDriven = false }) {
+    super({ kind: "ship", pos, angle: quantizeAngle(angle), radius: SHIP.radius });
     this.name = name;
+    this.inputDriven = inputDriven;
     this.controls = { thrust: false, left: false, right: false, fire: false };
     this.thrust = false;
     this.cooldown = 0;
@@ -101,10 +131,14 @@ export class Ship extends Entity {
     this.effects.set(type, EFFECT_DURATION[type]);
   }
 
-  fire(world) {
+  get state() {
+    return { x: this.pos.x, y: this.pos.y, vx: this.vel.x, vy: this.vel.y, angle: this.angle };
+  }
+
+  fire(world, shot = 0) {
     const nose = this.pos.add(Vector2.fromAngle(this.angle, this.radius + 8));
     const vel = this.vel.add(Vector2.fromAngle(this.angle, BULLET.speed));
-    const bullet = new Bullet({ pos: nose, vel, ownerId: this.id });
+    const bullet = new Bullet({ pos: nose, vel, ownerId: this.id, shot });
     if (this.effects.has("homing")) {
       bullet.behaviors.push(homing({ targetKind: "ship", ignoreId: this.id, turnRate: 4 }));
     }
@@ -113,29 +147,38 @@ export class Ship extends Entity {
     this.cooldown = this.effects.has("rapid") ? SHIP.rapidCooldown : SHIP.fireCooldown;
   }
 
-  update(dt, world) {
+  tick(dt, world) {
     for (const [type, left] of this.effects) {
       if (left - dt <= 0) this.effects.delete(type);
       else this.effects.set(type, left - dt);
     }
+    if (!this.dead) return;
+    this.respawnIn -= dt;
+    if (this.respawnIn <= 0) this.respawn(world);
+  }
 
-    if (this.dead) {
-      this.respawnIn -= dt;
-      if (this.respawnIn <= 0) this.respawn(world);
-      return;
-    }
-
-    const next = integrate(
-      { x: this.pos.x, y: this.pos.y, vx: this.vel.x, vy: this.vel.y, angle: this.angle },
-      this.controls,
-      dt,
-    );
+  steer(controls, dt, world, shot = 0) {
+    if (this.dead) return;
+    const next = shipPhysics(this.state, controls, dt, wellFields(world));
     this.pos = new Vector2(next.x, next.y);
     this.vel = new Vector2(next.vx, next.vy);
     this.angle = next.angle;
     this.thrust = next.thrust;
 
     this.cooldown = Math.max(0, this.cooldown - dt);
-    if (this.controls.fire && this.cooldown === 0) this.fire(world);
+    if (controls.fire && this.cooldown === 0) this.fire(world, shot);
+  }
+
+  settle() {
+    if (this.dead) return;
+    const q = quantizeShip(this.state);
+    this.pos = new Vector2(q.x, q.y);
+    this.vel = new Vector2(q.vx, q.vy);
+    this.angle = q.angle;
+  }
+
+  update(dt, world) {
+    this.tick(dt, world);
+    if (!this.inputDriven) this.steer(this.controls, dt, world);
   }
 }

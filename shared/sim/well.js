@@ -27,6 +27,16 @@ export class GravityWell extends Entity {
     this.age = 0;
   }
 
+  get field() {
+    return {
+      x: this.pos.x,
+      y: this.pos.y,
+      radius: this.radius,
+      range: this.range,
+      strength: this.strength,
+    };
+  }
+
   get timeLeft() {
     return this.life - this.age;
   }

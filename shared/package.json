@@ -1,0 +1,12 @@
+{
+  "name": "@gloop/shared",
+  "private": true,
+  "version": "0.5.0",
+  "type": "module",
+  "exports": {
+    "./*": "./*"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

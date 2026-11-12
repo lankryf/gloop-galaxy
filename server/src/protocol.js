@@ -1,3 +1,5 @@
+import { MAX_BUTTONS } from "@gloop/shared/protocol.js";
+
 export const PROTOCOL_VERSION = 0;
 export const MAX_MESSAGE_BYTES = 2048;
 
@@ -22,12 +24,39 @@ function isString(value, max) {
 const validators = {
   join(msg) {
     if (!isString(msg.room, 32)) return "room must be a non-empty string";
-    if (!isString(msg.name, 16) || !NAME.test(msg.name))
+    if (!isString(msg.name, 16) || !NAME.test(msg.name)) {
       return "name must be 1-16 letters or digits";
+    }
+    if (msg.codec !== undefined && msg.codec !== "json" && msg.codec !== "binary") {
+      return "codec must be json or binary";
+    }
     return null;
   },
   chat(msg) {
     if (!isString(msg.text, 200)) return "text must be 1-200 characters";
+    return null;
+  },
+  input(msg) {
+    if (!Array.isArray(msg.inputs) || msg.inputs.length === 0 || msg.inputs.length > 16) {
+      return "inputs must be a list of 1-16 items";
+    }
+    for (const i of msg.inputs) {
+      if (!Number.isInteger(i?.seq) || i.seq < 0 || i.seq > 0xffffffff) return "seq must be uint32";
+      if (!Number.isInteger(i.buttons) || i.buttons < 0 || i.buttons > MAX_BUTTONS)
+        return "bad buttons";
+    }
+    return null;
+  },
+  ping(msg) {
+    if (typeof msg.t !== "number" || !Number.isFinite(msg.t)) return "t must be a number";
+    return null;
+  },
+  netsim(msg) {
+    for (const key of ["lag", "jitter"]) {
+      if (!Number.isInteger(msg[key]) || msg[key] < 0 || msg[key] > 1000)
+        return `${key} must be 0-1000 ms`;
+    }
+    if (typeof msg.drop !== "number" || msg.drop < 0 || msg.drop > 0.5) return "drop must be 0-0.5";
     return null;
   },
   leave() {
