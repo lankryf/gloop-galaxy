@@ -9,6 +9,9 @@ export const SHIP = {
   drag: 0.9,
   maxSpeed: 520,
   radius: 22,
+  maxHp: 100,
+  fireCooldown: 0.18,
+  respawnDelay: 2,
 };
 
 export function integrate(ship, input, dt) {
@@ -39,25 +42,59 @@ export function integrate(ship, input, dt) {
 }
 
 export class Ship extends Entity {
+  #hp = SHIP.maxHp;
+
   constructor({ pos, angle = -Math.PI / 2, name = "pilot" }) {
     super({ kind: "ship", pos, angle, radius: SHIP.radius });
     this.name = name;
-    this.controls = { thrust: false, left: false, right: false };
+    this.controls = { thrust: false, left: false, right: false, fire: false };
     this.thrust = false;
+    this.cooldown = 0;
+    this.score = 0;
+    this.deaths = 0;
+    this.dead = false;
+    this.respawnIn = 0;
   }
 
-  attach(world) {
-    this.world = world;
-    return this;
+  get hp() {
+    return this.#hp;
   }
 
-  fire() {
-    const nose = this.pos.add(Vector2.fromAngle(this.angle, this.radius + 6));
+  damage(amount) {
+    if (this.dead) return false;
+    this.#hp = Math.max(0, this.#hp - amount);
+    if (this.#hp > 0) return false;
+    this.dead = true;
+    this.collidable = false;
+    this.deaths += 1;
+    this.respawnIn = SHIP.respawnDelay;
+    return true;
+  }
+
+  respawn(world) {
+    const spot = world.findSafeSpot(this.radius, ARENA);
+    this.pos = new Vector2(spot.x, spot.y);
+    this.prevPos = this.pos;
+    this.vel = new Vector2();
+    this.#hp = SHIP.maxHp;
+    this.dead = false;
+    this.collidable = true;
+  }
+
+  fire(world) {
+    const nose = this.pos.add(Vector2.fromAngle(this.angle, this.radius + 8));
     const vel = this.vel.add(Vector2.fromAngle(this.angle, BULLET.speed));
-    this.world.spawn(new Bullet({ pos: nose, vel, ownerId: this.id }));
+    world.spawn(new Bullet({ pos: nose, vel, ownerId: this.id }));
+    this.cooldown = SHIP.fireCooldown;
   }
 
-  update(dt) {
+  update(dt, world) {
+    if (this.dead) {
+      this.respawnIn -= dt;
+      if (this.respawnIn <= 0) this.respawn(world);
+      return;
+    }
+
     const next = integrate(
       { x: this.pos.x, y: this.pos.y, vx: this.vel.x, vy: this.vel.y, angle: this.angle },
       this.controls,
@@ -67,5 +104,8 @@ export class Ship extends Entity {
     this.vel = new Vector2(next.vx, next.vy);
     this.angle = next.angle;
     this.thrust = next.thrust;
+
+    this.cooldown = Math.max(0, this.cooldown - dt);
+    if (this.controls.fire && this.cooldown === 0) this.fire(world);
   }
 }

@@ -90,7 +90,7 @@ export function interpolateShip(ship, alpha, arena) {
   return { ...interpolate(ship, alpha, arena), thrust: ship.thrust };
 }
 
-export function drawShip(ctx, ship, time) {
+export function drawShip(ctx, ship, time, own = true) {
   ctx.save();
   ctx.translate(ship.x, ship.y);
   ctx.rotate(ship.angle);
@@ -111,7 +111,7 @@ export function drawShip(ctx, ship, time) {
   ctx.lineWidth = 4;
   ctx.strokeStyle = INK;
 
-  ctx.fillStyle = "#b7b9c9";
+  ctx.fillStyle = own ? "#b7b9c9" : "#ffb347";
   ctx.beginPath();
   ctx.moveTo(26, 0);
   ctx.quadraticCurveTo(10, -18, -18, -14);
@@ -158,7 +158,7 @@ export function drawBullet(ctx, b) {
   ctx.strokeStyle = INK;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(b.x, b.y, 5, 0, Math.PI * 2);
+  ctx.arc(b.x, b.y, 7, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 }
@@ -187,4 +187,19 @@ export function drawAsteroid(ctx, a, p) {
   ctx.arc(-a.radius * 0.35, a.radius * 0.25, a.radius * 0.14, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
+}
+
+export function drawExplosion(ctx, e) {
+  const t = e.ttl / e.duration;
+  ctx.globalAlpha = Math.max(0, t);
+  ctx.fillStyle = e.color;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2;
+  for (const p of e.particles) {
+    ctx.beginPath();
+    ctx.arc(p.pos.x, p.pos.y, p.r * (0.5 + t), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
 }

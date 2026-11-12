@@ -6,6 +6,7 @@ import {
   drawAsteroid,
   drawBackground,
   drawBullet,
+  drawExplosion,
   drawHud,
   drawShip,
   interpolate,
@@ -23,10 +24,9 @@ const input = createInput(window);
 const world = new World({ seed: 42 });
 
 const ship = world.spawn(new Ship({ pos: new Vector2(ARENA.width / 2, ARENA.height / 2) }));
-ship.attach(world);
+const dummy = world.spawn(new Ship({ pos: new Vector2(300, 200), angle: 0, name: "dummy" }));
+dummy.controls = { thrust: true, left: true, right: false, fire: false };
 for (let i = 0; i < 6; i++) world.spawn(Asteroid.random(world.rng, ARENA));
-
-input.onPress("Space", () => ship.fire());
 
 let simTime = 0;
 let reported = false;
@@ -38,6 +38,7 @@ function readControls() {
     thrust: input.isDown("ArrowUp") || input.isDown("KeyW"),
     left: input.isDown("ArrowLeft") || input.isDown("KeyA"),
     right: input.isDown("ArrowRight") || input.isDown("KeyD"),
+    fire: input.isDown("Space"),
   };
 }
 
@@ -63,10 +64,15 @@ function render(alpha, stats) {
   drawBackground(ctx, ARENA);
   for (const a of world.ofKind("asteroid")) drawAsteroid(ctx, a, interpolate(a, alpha, ARENA));
   for (const b of world.ofKind("bullet")) drawBullet(ctx, interpolate(b, alpha, ARENA));
-  drawShip(ctx, interpolateShip(ship, alpha, ARENA), performance.now());
+  for (const s of world.ofKind("ship")) {
+    if (!s.dead) drawShip(ctx, interpolateShip(s, alpha, ARENA), performance.now(), s === ship);
+  }
+  for (const e of world.ofKind("explosion")) drawExplosion(ctx, e);
   drawHud(ctx, view, stats, [
     `jitter   ${stats.jitter.toFixed(2)} ms`,
     `entities ${world.size}`,
+    `score    ${ship.score}`,
+    `hp       ${ship.hp}${ship.dead ? ` (respawn ${ship.respawnIn.toFixed(1)}s)` : ""}`,
     experiment ? `exp      ${experiment}` : "",
   ]);
 }

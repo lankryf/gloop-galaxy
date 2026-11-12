@@ -1,13 +1,16 @@
+import { findCollisions } from "./collision.js";
 import { createRng } from "./random.js";
+import { resolveCollisions } from "./rules.js";
 
 export class World {
   #entities = new Map();
   #pending = [];
   #stepping = false;
 
-  constructor({ seed = 1 } = {}) {
+  constructor({ seed = 1, detect = findCollisions } = {}) {
     this.rng = createRng(seed);
     this.time = 0;
+    this.detect = detect;
   }
 
   spawn(entity) {
@@ -45,11 +48,33 @@ export class World {
     for (const entity of this.#entities.values()) {
       if (entity.alive) entity.update(dt, this);
     }
+    resolveCollisions(this, this.detect(this.#entities.values()));
     this.#sweep();
     this.#stepping = false;
     for (const entity of this.#pending) this.#entities.set(entity.id, entity);
     this.#pending.length = 0;
     this.time += dt;
+  }
+
+  findSafeSpot(radius, arena, tries = 30) {
+    let best = null;
+    let bestDistance = -1;
+    for (let i = 0; i < tries; i++) {
+      const x = this.rng.range(radius, arena.width - radius);
+      const y = this.rng.range(radius, arena.height - radius);
+      let nearest = Number.POSITIVE_INFINITY;
+      for (const e of this.#entities.values()) {
+        if (!e.collidable || !e.alive) continue;
+        const d = Math.hypot(e.pos.x - x, e.pos.y - y) - e.radius;
+        if (d < nearest) nearest = d;
+      }
+      if (nearest > bestDistance) {
+        bestDistance = nearest;
+        best = { x, y };
+      }
+      if (nearest > radius * 6) break;
+    }
+    return best;
   }
 
   #sweep() {
