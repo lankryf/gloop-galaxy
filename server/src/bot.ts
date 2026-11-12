@@ -95,7 +95,12 @@ export function decide(world: World, ship: Ship, rng: Rng): Controls {
   };
 }
 
-export class Bot {
+export interface PlayerInput {
+  readonly playerId: string;
+  think(world: World, ship: Ship): InputRecord;
+}
+
+export class Bot implements PlayerInput {
   readonly playerId: string;
   readonly name: string;
   readonly rng: Rng;

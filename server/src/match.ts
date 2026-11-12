@@ -20,7 +20,7 @@ import { Ship } from "@gloop/shared/sim/ship.ts";
 import { Vector2 } from "@gloop/shared/sim/vector.ts";
 import { GravityWell } from "@gloop/shared/sim/well.ts";
 import { World } from "@gloop/shared/sim/world.ts";
-import type { Bot } from "./bot.ts";
+import type { PlayerInput } from "./bot.ts";
 import type { Deliver, Player, Room } from "./rooms.ts";
 
 const MAX_QUEUE = 8;
@@ -127,7 +127,7 @@ export class Match {
   readonly room: Room;
   readonly world: World;
   readonly players = new Map<string, Entry>();
-  readonly bots = new Map<string, Bot>();
+  readonly bots = new Map<string, PlayerInput>();
   tick: Tick = tick(0);
 
   constructor({ room }: { room: Room }) {
@@ -183,7 +183,7 @@ export class Match {
     return ship.id;
   }
 
-  addBot(player: Player, bot: Bot): EntityId {
+  addBot(player: Player, bot: PlayerInput): EntityId {
     this.bots.set(player.id, bot);
     return this.addPlayer(player, { codec: "binary", send: () => {} });
   }

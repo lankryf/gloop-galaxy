@@ -13,6 +13,7 @@ import {
 import type { RawData, WebSocketServer } from "ws";
 import { WebSocket } from "ws";
 import type { ServerConfig } from "./config.ts";
+import { startHeartbeat } from "./heartbeat.ts";
 import type { Logger } from "./logger.ts";
 import { TokenBucket } from "./ratelimit.ts";
 import type { Deliver, DeliverOptions, Player, Room, RoomManager } from "./rooms.ts";
@@ -103,17 +104,11 @@ export function attachSockets(
     );
   }
 
-  const heartbeat = setInterval(() => {
-    for (const [ws, conn] of connections) {
-      if (conn.missedPongs >= 2) {
-        logger.warn("heartbeat lost", { player: conn.player?.id });
-        ws.terminate();
-        continue;
-      }
-      conn.missedPongs += 1;
-      ws.ping();
-    }
-  }, config.heartbeatMs);
+  const stopHeartbeat = startHeartbeat(
+    () => connections.values(),
+    config.heartbeatMs,
+    (conn) => logger.warn("heartbeat lost", { player: conn.player?.id }),
+  );
 
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     const netsim = createNetsim(
@@ -258,7 +253,7 @@ export function attachSockets(
 
   return {
     close(code = CloseCode.goingAway, reason = "server shutting down") {
-      clearInterval(heartbeat);
+      stopHeartbeat();
       for (const ws of connections.keys()) {
         send(ws, encodeServerMessage("shutdown", {}));
         ws.close(code, reason);
