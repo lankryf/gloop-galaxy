@@ -25,9 +25,8 @@ export function integrate(ship, input, dt) {
   angle += turn * SHIP.turnSpeed * dt;
 
   if (input.thrust) {
-    const wobble = 1 + (Math.random() - 0.5) * 0.2;
-    vx += Math.cos(angle) * SHIP.thrust * dt * wobble;
-    vy += Math.sin(angle) * SHIP.thrust * dt * wobble;
+    vx += Math.cos(angle) * SHIP.thrust * dt;
+    vy += Math.sin(angle) * SHIP.thrust * dt;
   }
 
   const damping = Math.max(0, 1 - SHIP.drag * dt);
