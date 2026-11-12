@@ -1,9 +1,10 @@
 import { ARENAS, isArenaName } from "@gloop/shared/arenas.ts";
 import type { RoomInfo, ServerMessageOf } from "@gloop/shared/protocol.ts";
+import { FATAL_CLOSE_CODES } from "@gloop/shared/protocol.ts";
 import { ARENA } from "@gloop/shared/sim/arena.ts";
 import type { Assets, Progress } from "./assets/loader.ts";
 import { buildJobs, emptyAssets, loadAll, loadJson } from "./assets/loader.ts";
-import type { Manifest } from "./assets/manifest.ts";
+import type { Manifest, Theme } from "./assets/manifest.ts";
 import { ManifestSchema } from "./assets/manifest.ts";
 import { messageOf } from "./assets/retry.ts";
 import { createAudio } from "./audio.ts";
@@ -116,17 +117,12 @@ const OFFLINE_ROOM: RoomInfo = {
   maxPlayers: 1,
 };
 
-function pickRoom(message = ""): Promise<{ room: RoomInfo; name: string }> {
+function pickRoom(notice = ""): Promise<{ room: RoomInfo; name: string }> {
   if (offline) return Promise.resolve({ room: OFFLINE_ROOM, name: "probe" });
   const lobby = new Lobby();
   const panel = document.createElement("div");
   overlay.replaceChildren(panel);
-  const unmount = mountLobby(lobby, panel);
-  if (message) {
-    const error = must(panel, ".error", HTMLElement);
-    error.hidden = false;
-    error.textContent = message;
-  }
+  const unmount = mountLobby(lobby, panel, notice);
   return new Promise((resolve) => {
     lobby.events.once("join", (choice) => {
       unmount();
@@ -172,8 +168,10 @@ function joinRoom(room: RoomInfo, name: string): Promise<Session> {
   });
 }
 
-async function enterRoom(): Promise<{ room: RoomInfo; name: string; session: Session | null }> {
-  let message = "";
+async function enterRoom(
+  notice: string,
+): Promise<{ room: RoomInfo; name: string; session: Session | null }> {
+  let message = notice;
   for (;;) {
     const { room, name } = await pickRoom(message);
     if (offline) return { room, name, session: null };
@@ -199,41 +197,50 @@ async function boot(): Promise<void> {
     if (entry) sprites[name] = { image, frames: entry.frames };
   }
 
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const { room, name, session } = await enterRoom();
-  await audio.unlock().catch(() => {});
+  let notice = "";
+  for (;;) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const { room, name, session } = await enterRoom(notice);
+    await audio.unlock().catch(() => {});
+    const arena = isArenaName(room.arena) ? room.arena : "nebula";
+    const theme = assets.arenas[arena] ?? Object.values(assets.arenas)[0];
+    if (!theme) throw new Error("no arena themes loaded");
 
-  const arena = isArenaName(room.arena) ? room.arena : "nebula";
-  const theme = assets.arenas[arena] ?? Object.values(assets.arenas)[0];
-  if (!theme) throw new Error("no arena themes loaded");
-
-  if (!session) {
-    const game = startGame({
-      ctx,
-      view,
-      input,
-      audio,
-      sprites,
-      theme,
-      rules: ARENAS[arena],
-      pilot: name,
-      experiment: gameExperiment(),
-    });
-    for (const f of assets.failures) game.hud.note(`Не завантажилось ${f.name}: ${f.error}`, 8);
-    return;
+    if (!session) {
+      const game = startGame({
+        ctx,
+        view,
+        input,
+        audio,
+        sprites,
+        theme,
+        rules: ARENAS[arena],
+        pilot: name,
+        experiment: gameExperiment(),
+      });
+      for (const f of assets.failures) game.hud.note(`Не завантажилось ${f.name}: ${f.error}`, 8);
+      return;
+    }
+    notice = await playOnline(session, { sprites, theme });
   }
+}
 
+function playOnline(
+  session: Session,
+  { sprites, theme }: { sprites: Record<string, SpriteSheet>; theme: Theme },
+): Promise<string> {
   const { connection } = session;
   let you = session.welcome.you;
+  let restarting = false;
   connection.events.on("welcome", (welcome) => {
     you = welcome.you;
   });
-  connection.events.on("open", () =>
-    connection.send("join", { room: room.id, name, codec: netOptions.codec }),
-  );
-  mountChat(overlay, connection, { you: () => you });
-  window.gloop = startOnlineGame({
+  connection.events.on("shutdown", () => {
+    restarting = true;
+  });
+  const unmountChat = mountChat(overlay, connection, { you: () => you });
+  const game = startOnlineGame({
     ctx,
     view,
     input,
@@ -243,6 +250,35 @@ async function boot(): Promise<void> {
     connection,
     welcome: session.welcome,
     options: { ...netOptions },
+  });
+  window.gloop = game;
+
+  return new Promise((resolve) => {
+    connection.events.once("closed", ({ code, reason }) => {
+      game.stop();
+      unmountChat();
+      if (FATAL_CLOSE_CODES.has(code)) {
+        resolve(`Сервер закрив з'єднання: ${reason || code}.`);
+        return;
+      }
+      const banner = document.createElement("div");
+      banner.className = "panel banner";
+      banner.textContent = restarting
+        ? "Сервер перезапускається, чекаю на нього…"
+        : `Зв'язок із сервером втрачено (код ${code}), перепідключаюсь…`;
+      overlay.replaceChildren(banner);
+      connection.events.on("reconnecting", ({ attempt, delay }) => {
+        banner.textContent = `${restarting ? "Сервер перезапускається" : "Немає зв'язку"}: спроба ${attempt}, наступна через ${(delay / 1000).toFixed(1)} с`;
+      });
+      connection.events.once("open", () => {
+        connection.close();
+        resolve(
+          restarting
+            ? "Сервер перезапустився, матч скинуто. Оберіть кімнату."
+            : "Зв'язок відновлено, але матч на сервері вже інший. Оберіть кімнату.",
+        );
+      });
+    });
   });
 }
 

@@ -199,7 +199,7 @@ export class RoomManager {
       }, 60_000).unref();
     }
 
-    this.logger.info("room created", { room: id, name, arena });
+    this.logger.info("room created", { roomId: id, name, arena });
     return room;
   }
 
@@ -207,11 +207,11 @@ export class RoomManager {
     const { file, done } = startMatchLog(room, this.logDir);
     const tracked: Promise<void> = done
       .catch((error: unknown) =>
-        this.logger.error("match log failed", { room: room.id, error: errorMessage(error) }),
+        this.logger.error("match log failed", { roomId: room.id, error: errorMessage(error) }),
       )
       .finally(() => this.matchLogs.delete(tracked));
     this.matchLogs.add(tracked);
-    this.logger.info("match log started", { room: room.id, file });
+    this.logger.info("match log started", { roomId: room.id, file });
   }
 
   addBots(id: string, count: number): Room {
@@ -245,7 +245,7 @@ export class RoomManager {
     if (!room) return;
     this.#rooms.delete(id);
     room.removeAllListeners();
-    this.logger.info("room deleted", { room: id });
+    this.logger.info("room deleted", { roomId: id });
   }
 
   stats(): MatchStats[] {

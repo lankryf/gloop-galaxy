@@ -8,9 +8,11 @@ import { z } from "zod";
 import type { ServerConfig } from "./config.ts";
 import { listReplays, replayPath } from "./log/replay.ts";
 import type { Logger } from "./logger.ts";
-import { errorMessage } from "./logger.ts";
+import { errorFields, errorMessage } from "./logger.ts";
+import { metrics } from "./metrics.ts";
 import type { RoomManager } from "./rooms.ts";
 import { RoomError } from "./rooms.ts";
+import { COMMIT, VERSION } from "./version.ts";
 
 const MIME: Readonly<Record<string, string>> = {
   ".html": "text/html; charset=utf-8",
@@ -148,15 +150,33 @@ async function route(
   req: IncomingMessage,
   res: ServerResponse,
   url: URL,
-  { rooms, config, startedAt }: { rooms: RoomManager; config: ServerConfig; startedAt: number },
+  {
+    rooms,
+    config,
+    startedAt,
+    isReady,
+  }: { rooms: RoomManager; config: ServerConfig; startedAt: number; isReady: () => boolean },
 ): Promise<void> {
   if (url.pathname === "/health") {
     return json(res, 200, {
       status: "ok",
+      version: VERSION,
+      commit: COMMIT,
       uptime: Math.round((Date.now() - startedAt) / 1000),
       rooms: rooms.list().length,
       players: rooms.playerCount,
     });
+  }
+
+  if (url.pathname === "/ready") {
+    const ready = isReady();
+    return json(res, ready ? 200 : 503, { ready });
+  }
+
+  if (url.pathname === "/metrics" && req.method === "GET") {
+    res.writeHead(200, { "Content-Type": metrics.registry.contentType });
+    res.end(await metrics.registry.metrics());
+    return;
   }
 
   if (url.pathname === "/api/rooms") {
@@ -220,19 +240,20 @@ export function createHandler({
   config,
   logger,
   startedAt = Date.now(),
+  isReady = () => true,
 }: {
   rooms: RoomManager;
   config: ServerConfig;
   logger: Logger;
   startedAt?: number;
+  isReady?: () => boolean;
 }): RequestListener {
   return (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
-    route(req, res, url, { rooms, config, startedAt }).catch((error: unknown) => {
+    route(req, res, url, { rooms, config, startedAt, isReady }).catch((error: unknown) => {
       const status =
         error instanceof HttpError ? error.status : error instanceof RoomError ? 409 : 500;
-      if (status === 500)
-        logger.error("request failed", { url: req.url, error: errorMessage(error) });
+      if (status === 500) logger.error("request failed", { url: req.url, ...errorFields(error) });
       if (res.headersSent) {
         res.destroy();
         return;

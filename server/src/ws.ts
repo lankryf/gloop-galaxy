@@ -13,8 +13,11 @@ import {
 import type { RawData, WebSocketServer } from "ws";
 import { WebSocket } from "ws";
 import type { ServerConfig } from "./config.ts";
+import type { ConnectionGate } from "./gate.ts";
 import { startHeartbeat } from "./heartbeat.ts";
 import type { Logger } from "./logger.ts";
+import type { RejectionReason } from "./metrics.ts";
+import { metrics } from "./metrics.ts";
 import { TokenBucket } from "./ratelimit.ts";
 import type { Deliver, DeliverOptions, Player, Room, RoomManager } from "./rooms.ts";
 
@@ -23,6 +26,7 @@ const SLOW_KILL_BYTES = 1024 * 1024;
 
 interface Connection {
   readonly socket: WebSocket;
+  log: Logger;
   player: Player | null;
   room: Room | null;
   closing: boolean;
@@ -36,12 +40,34 @@ export function send(
 ): boolean {
   if (ws.readyState !== WebSocket.OPEN) return false;
   if (ws.bufferedAmount > SLOW_KILL_BYTES) {
+    metrics.reject("slow_client");
     ws.close(CloseCode.slowClient, "too slow");
     return false;
   }
   if (!critical && ws.bufferedAmount > SLOW_DROP_BYTES) return false;
   ws.send(data);
+  metrics.messagesOut.inc();
+  metrics.bytesOut.inc(typeof data === "string" ? Buffer.byteLength(data) : data.byteLength);
   return true;
+}
+
+function reasonFor(code: number): RejectionReason {
+  switch (code) {
+    case CloseCode.rateLimited:
+      return "rate_limited";
+    case CloseCode.joinTimeout:
+      return "join_timeout";
+    case CloseCode.roomFull:
+      return "room_full";
+    case CloseCode.noRoom:
+      return "no_room";
+    case CloseCode.slowClient:
+      return "slow_client";
+    case CloseCode.heartbeat:
+      return "heartbeat";
+    default:
+      return "bad_message";
+  }
 }
 
 function broadcast(room: Room, data: string, options?: DeliverOptions): void {
@@ -85,8 +111,13 @@ function netsimFromUrl(url: string | undefined): NetsimSettings {
 
 export function attachSockets(
   wss: WebSocketServer,
-  { rooms, config, logger }: { rooms: RoomManager; config: ServerConfig; logger: Logger },
-): { close(code?: number, reason?: string): void } {
+  {
+    rooms,
+    config,
+    logger,
+    gate,
+  }: { rooms: RoomManager; config: ServerConfig; logger: Logger; gate: ConnectionGate },
+): { close(code?: number, reason?: string): Promise<void> } {
   const wired = new WeakSet<Room>();
   const connections = new Map<WebSocket, Connection>();
 
@@ -107,21 +138,26 @@ export function attachSockets(
   const stopHeartbeat = startHeartbeat(
     () => connections.values(),
     config.heartbeatMs,
-    (conn) => logger.warn("heartbeat lost", { player: conn.player?.id }),
+    (conn) => {
+      metrics.reject("heartbeat");
+      conn.log.warn("heartbeat lost");
+    },
   );
 
-  wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
+  wss.on("connection", (ws: WebSocket, req: IncomingMessage, ip: string) => {
     const netsim = createNetsim(
       config.demoEndpoints ? netsimFromUrl(req.url) : { lag: 0, jitter: 0, drop: 0 },
     );
     const conn: Connection = {
       socket: ws,
+      log: logger.child({ ip }),
       player: null,
       room: null,
       closing: false,
       missedPongs: 0,
     };
     connections.set(ws, conn);
+    metrics.connections.inc();
     const bucket = new TokenBucket({
       ratePerSecond: config.messagesPerSecond,
       burst: config.messagesPerSecond * 2,
@@ -137,21 +173,23 @@ export function attachSockets(
     });
 
     ws.on("error", (error: Error & { code?: string }) => {
-      logger.warn("socket error", {
-        player: conn.player?.id,
+      conn.log.warn("socket error", {
         error: error.message,
         code: error.code,
       });
     });
 
     const joinTimer = setTimeout(() => {
-      if (!conn.player) ws.close(CloseCode.joinTimeout, "join timeout");
+      if (conn.player) return;
+      metrics.reject("join_timeout");
+      ws.close(CloseCode.joinTimeout, "join timeout");
     }, config.joinTimeoutMs);
 
     function reject(code: number, reason: string): void {
       if (conn.closing) return;
       conn.closing = true;
-      logger.warn("closing socket", { player: conn.player?.id, code, reason });
+      metrics.reject(reasonFor(code));
+      conn.log.warn("closing socket", { code, reason });
       send(ws, encodeServerMessage("error", { code, message: reason }));
       ws.close(code, reason.slice(0, 120));
     }
@@ -171,6 +209,7 @@ export function attachSockets(
       clearTimeout(joinTimer);
       conn.player = player;
       conn.room = room;
+      conn.log = conn.log.child({ roomId: room.id, playerId: player.id });
       const codec = msg.codec ?? "binary";
       room.join(player);
       if (!room.match) return reject(CloseCode.noRoom, "room has no match");
@@ -187,7 +226,7 @@ export function attachSockets(
         }),
       );
       broadcast(room, encodeServerMessage("roster", { players: room.roster }));
-      logger.info("player joined", { room: room.id, player: player.id, name: player.name });
+      conn.log.info("player joined", { name: player.name });
     }
 
     function handleInputs(inputs: readonly InputRecord[]): void {
@@ -224,6 +263,8 @@ export function attachSockets(
     ws.on("message", (raw: RawData, isBinary: boolean) => {
       if (conn.closing) return;
       const data = toBuffer(raw);
+      metrics.messagesIn.inc({ format: isBinary ? "binary" : "text" });
+      metrics.bytesIn.inc(data.length);
       if (data.length > MAX_MESSAGE_BYTES) return reject(CloseCode.badMessage, "message too large");
       if (!isBinary) {
         const parsed = parseClientMessage(data.toString("utf8"));
@@ -243,21 +284,30 @@ export function attachSockets(
     ws.on("close", (code: number) => {
       clearTimeout(joinTimer);
       connections.delete(ws);
+      metrics.connections.dec();
+      gate.release(ip);
       const { player, room } = conn;
       if (!player || !room) return;
       room.match?.removePlayer(player.id);
       room.leave(player.id, code === CloseCode.normal ? "left" : `closed ${code}`);
-      logger.info("player left", { room: room.id, player: player.id, code });
+      conn.log.info("player left", { code });
     });
   });
 
   return {
-    close(code = CloseCode.goingAway, reason = "server shutting down") {
+    async close(code = CloseCode.goingAway, reason = "server shutting down") {
       stopHeartbeat();
+      const closed: Promise<void>[] = [];
       for (const ws of connections.keys()) {
+        closed.push(new Promise((resolve) => ws.once("close", () => resolve())));
         send(ws, encodeServerMessage("shutdown", {}));
         ws.close(code, reason);
       }
+      const timeout = new Promise<void>((resolve) =>
+        setTimeout(resolve, config.shutdownTimeoutMs / 2).unref(),
+      );
+      await Promise.race([Promise.all(closed), timeout]);
+      for (const ws of connections.keys()) ws.terminate();
     },
   };
 }

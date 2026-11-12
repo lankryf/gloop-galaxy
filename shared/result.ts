@@ -1,11 +1,11 @@
-export type Result<T> =
+export type Result<T, E = string> =
   | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: string };
+  | { readonly ok: false; readonly error: E };
 
-export function ok<T>(value: T): Result<T> {
+export function ok<T>(value: T): Result<T, never> {
   return { ok: true, value };
 }
 
-export function fail<T>(error: string): Result<T> {
+export function fail<E>(error: E): Result<never, E> {
   return { ok: false, error };
 }

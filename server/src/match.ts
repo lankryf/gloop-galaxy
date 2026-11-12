@@ -21,6 +21,7 @@ import { Vector2 } from "@gloop/shared/sim/vector.ts";
 import { GravityWell } from "@gloop/shared/sim/well.ts";
 import { World } from "@gloop/shared/sim/world.ts";
 import type { PlayerInput } from "./bot.ts";
+import { metrics } from "./metrics.ts";
 import type { Deliver, Player, Room } from "./rooms.ts";
 
 const MAX_QUEUE = 8;
@@ -237,7 +238,9 @@ export class Match {
 
     this.step();
 
-    this.#durations.push(performance.now() - started);
+    const duration = performance.now() - started;
+    this.#durations.push(duration);
+    metrics.tickSeconds.observe(duration / 1000);
     if (this.#durations.length > 300) this.#durations.shift();
     if (this.#intervals.length > 300) this.#intervals.shift();
     if (this.#running) this.#schedule();

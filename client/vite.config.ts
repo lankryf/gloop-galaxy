@@ -1,5 +1,17 @@
+import { execFileSync } from "node:child_process";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
+
+function gitCommit(): string {
+  try {
+    return execFileSync("git", ["rev-parse", "--short", "HEAD"]).toString().trim();
+  } catch {
+    return "unknown";
+  }
+}
+
+const commit = process.env.GIT_SHA?.slice(0, 7) || gitCommit();
+const version = process.env.APP_VERSION || "dev";
 
 function testingMiddleware(): Plugin {
   return {
@@ -43,11 +55,16 @@ const flaky = new Map<string, number>();
 
 export default defineConfig({
   appType: "mpa",
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+    __COMMIT__: JSON.stringify(commit),
+  },
   plugins: [testingMiddleware()],
   server: {
     proxy: {
       "/api": "http://localhost:8080",
       "/ws": { target: "ws://localhost:8080", ws: true },
+      "/health": "http://localhost:8080",
     },
   },
 });

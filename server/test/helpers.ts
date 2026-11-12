@@ -10,8 +10,9 @@ import { createApp } from "../src/app.ts";
 import type { ServerConfig } from "../src/config.ts";
 import { loadConfig } from "../src/config.ts";
 import type { Logger } from "../src/logger.ts";
+import { silentLogger } from "../src/logger.ts";
 
-export const quiet: Logger = { info() {}, warn() {}, error() {} };
+export const quiet: Logger = silentLogger;
 
 export interface TestServer {
   readonly app: App;

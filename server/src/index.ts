@@ -1,15 +1,27 @@
 import { createApp } from "./app.ts";
 import type { ServerConfig } from "./config.ts";
 import { loadConfig } from "./config.ts";
-import { errorMessage, logger } from "./logger.ts";
+import { createLogger, errorFields, errorMessage } from "./logger.ts";
+import { COMMIT, VERSION } from "./version.ts";
 
 let config: ServerConfig;
 try {
   config = loadConfig();
 } catch (error: unknown) {
-  logger.error(errorMessage(error));
+  createLogger().fatal(errorMessage(error));
   process.exit(1);
 }
+
+const logger = createLogger(config.logLevel, { version: VERSION, commit: COMMIT });
+
+process.on("uncaughtException", (error) => {
+  logger.fatal("uncaught exception", errorFields(error));
+  process.exit(1);
+});
+process.on("unhandledRejection", (reason) => {
+  logger.fatal("unhandled rejection", errorFields(reason));
+  process.exit(1);
+});
 
 const app = createApp(config, logger);
 app.rooms.create({ name: "Туманність Слимака", arena: "nebula", persistent: true });
@@ -23,15 +35,16 @@ let stopping = false;
 async function shutdown(signal: string): Promise<void> {
   if (stopping) return;
   stopping = true;
+  const started = performance.now();
   logger.info("shutting down", { signal });
   const force = setTimeout(() => {
     logger.error("forced exit after timeout");
     process.exit(1);
-  }, 10_000);
+  }, config.shutdownTimeoutMs);
   force.unref();
 
   await app.close();
-  logger.info("bye");
+  logger.info("bye", { ms: Math.round(performance.now() - started) });
   process.exit(0);
 }
 

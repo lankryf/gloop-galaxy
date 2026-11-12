@@ -21,10 +21,11 @@ function saveName(name: string): void {
   }
 }
 
-export function mountLobby(lobby: Lobby, root: HTMLElement): () => void {
+export function mountLobby(lobby: Lobby, root: HTMLElement, notice = ""): () => void {
   root.innerHTML = `
     <div class="panel lobby">
       <h1>Gloop Galaxy</h1>
+      <p class="notice" hidden></p>
       <label>Позивний <input name="pilot" maxlength="16" autocomplete="off" /></label>
       <div class="rooms-head"><span>Кімнати</span><span class="status"></span></div>
       <ul class="rooms"></ul>
@@ -45,6 +46,9 @@ export function mountLobby(lobby: Lobby, root: HTMLElement): () => void {
   const status = must(root, ".status", HTMLSpanElement);
   const join = must(root, ".join", HTMLButtonElement);
   const error = must(root, ".error", HTMLParagraphElement);
+  const noticeLine = must(root, ".notice", HTMLParagraphElement);
+  noticeLine.hidden = notice === "";
+  noticeLine.textContent = notice;
   const form = must(root, ".create-room", HTMLFormElement);
   const roomName = must(form, 'input[name="room"]', HTMLInputElement);
   const arena = must(form, 'select[name="arena"]', HTMLSelectElement);

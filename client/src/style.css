@@ -117,6 +117,20 @@ body {
   cursor: default;
 }
 
+.panel .notice {
+  color: #ffd84d;
+  margin: 0 0 12px;
+  max-width: 360px;
+}
+
+.banner {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
 .panel .error {
   color: #ff5c5c;
   margin: 12px 0 0;

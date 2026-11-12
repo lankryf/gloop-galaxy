@@ -100,6 +100,7 @@ export interface OnlineGame {
   readonly shipId: EntityId;
   readonly measures: () => Record<string, Percentiles>;
   readonly decoding: () => Record<string, Percentiles>;
+  stop(): void;
 }
 
 const isAlive = (ship: ShipSnap | null): ship is ShipSnap =>
@@ -463,6 +464,7 @@ export function startOnlineGame({
         ? `0 (respawn ${(self.respawn / 10).toFixed(1)}s)`
         : `${self.hp}`;
     return hudLines(stats, [
+      `build    ${__APP_VERSION__} ${__COMMIT__}`,
       `tick     ${buffer.latest?.tick ?? 0}`,
       `hp       ${hp}`,
       `effects  ${effects.join(", ") || "-"}`,
@@ -530,22 +532,27 @@ export function startOnlineGame({
     if (options.netgraph) netgraph.draw(ctx, view);
   }
 
-  window.setInterval(() => connection.send("ping", { t: performance.now() }), 1000);
+  const pinger = window.setInterval(() => connection.send("ping", { t: performance.now() }), 1000);
+  const listeners = new AbortController();
 
-  window.addEventListener("keydown", (e) => {
-    if (e.target instanceof HTMLInputElement) return;
-    if (e.code === "F2") {
-      e.preventDefault();
-      connection.send("netsim", netgraph.nextPreset());
-    } else if (e.code === "BracketLeft") {
-      buffer.delayMs = Math.max(0, buffer.delayMs - 16);
-    } else if (e.code === "BracketRight") {
-      buffer.delayMs = Math.min(500, buffer.delayMs + 16);
-    } else if (e.code === "F3") {
-      e.preventDefault();
-      options.netgraph = !options.netgraph;
-    }
-  });
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.target instanceof HTMLInputElement) return;
+      if (e.code === "F2") {
+        e.preventDefault();
+        connection.send("netsim", netgraph.nextPreset());
+      } else if (e.code === "BracketLeft") {
+        buffer.delayMs = Math.max(0, buffer.delayMs - 16);
+      } else if (e.code === "BracketRight") {
+        buffer.delayMs = Math.min(500, buffer.delayMs + 16);
+      } else if (e.code === "F3") {
+        e.preventDefault();
+        options.netgraph = !options.netgraph;
+      }
+    },
+    { signal: listeners.signal },
+  );
 
   const loop = createLoop({
     step: TICK_DT,
@@ -559,6 +566,12 @@ export function startOnlineGame({
     buffer,
     netgraph,
     measures,
+    stop() {
+      loop.stop();
+      clearInterval(pinger);
+      listeners.abort();
+      workerDecoder?.stop();
+    },
     decoding: () =>
       workerDecoder
         ? {
