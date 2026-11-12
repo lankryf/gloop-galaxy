@@ -1,104 +1,134 @@
-import { busyWait, experiment, probe, probeControls } from "./experiments.js";
+import { buildJobs, loadAll, loadJson } from "./assets/loader.js";
+import { createAudio } from "./audio.js";
+import { applyFailMode, failMode, gameExperiment, probe, sequential } from "./experiments.js";
+import { startGame } from "./game.js";
 import { createInput } from "./input.js";
-import { createLoop } from "./loop.js";
-import { beginFrame, setupCanvas } from "./render/canvas.js";
-import {
-  drawAsteroid,
-  drawBackground,
-  drawBullet,
-  drawExplosion,
-  drawHud,
-  drawPickup,
-  drawShield,
-  drawShip,
-  interpolate,
-  interpolateShip,
-} from "./render/draw.js";
+import { Lobby } from "./lobby/lobby.js";
+import { mountLobby } from "./lobby/view.js";
+import { setupCanvas } from "./render/canvas.js";
+import { drawLoading } from "./screens/loading.js";
 import { ARENA } from "./sim/arena.js";
-import { Asteroid } from "./sim/asteroid.js";
-import { Pickup } from "./sim/pickup.js";
-import { Ship } from "./sim/ship.js";
-import { Vector2 } from "./sim/vector.js";
-import { World } from "./sim/world.js";
 
 const canvas = document.getElementById("game");
+const overlay = document.getElementById("overlay");
 const { ctx, view } = setupCanvas(canvas, ARENA);
 const input = createInput(window);
-const world = new World({ seed: 42 });
+const audio = createAudio();
 
-const ship = world.spawn(new Ship({ pos: new Vector2(ARENA.width / 2, ARENA.height / 2) }));
-const dummy = world.spawn(new Ship({ pos: new Vector2(300, 200), angle: 0, name: "dummy" }));
-dummy.controls = { thrust: true, left: true, right: false, fire: false };
-for (let i = 0; i < 6; i++) world.spawn(Asteroid.random(world.rng, ARENA));
-for (let i = 0; i < 2; i++) world.spawn(Pickup.random(world, ARENA));
+function actions(buttons) {
+  const box = document.createElement("div");
+  box.className = "loading-actions";
+  for (const [label, onClick] of buttons) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.addEventListener("click", onClick, { once: true });
+    box.append(b);
+  }
+  overlay.replaceChildren(box);
+}
 
-let simTime = 0;
-let reported = false;
-let frameCount = 0;
+function waitForClick(label) {
+  return new Promise((resolve) => actions([[label, resolve]]));
+}
 
-function readControls() {
-  if (probe) return probeControls(simTime);
-  return {
-    thrust: input.isDown("ArrowUp") || input.isDown("KeyW"),
-    left: input.isDown("ArrowLeft") || input.isDown("KeyA"),
-    right: input.isDown("ArrowRight") || input.isDown("KeyD"),
-    fire: input.isDown("Space"),
+async function loadAssets(manifest) {
+  const controller = new AbortController();
+  const onKey = (e) => {
+    if (e.code === "Escape")
+      controller.abort(new DOMException("Cancelled by player", "AbortError"));
   };
-}
-
-function simulate(dt) {
-  ship.controls = readControls();
-  world.step(dt);
-  simTime += dt;
-  input.endStep();
-
-  if (probe && !reported && simTime >= 5 - 1e-9) {
-    reported = true;
-    console.log(
-      `probe t=${simTime.toFixed(4)} x=${ship.pos.x.toFixed(3)} y=${ship.pos.y.toFixed(3)} steps=${loop.stats.totalSteps + 1}`,
-    );
-  }
-}
-
-function render(alpha, stats) {
-  frameCount++;
-  if (experiment === "block" && frameCount % 60 === 0) busyWait(100);
-
-  beginFrame(ctx, view);
-  drawBackground(ctx, ARENA);
-  for (const a of world.ofKind("asteroid")) drawAsteroid(ctx, a, interpolate(a, alpha, ARENA));
-  for (const p of world.ofKind("pickup")) drawPickup(ctx, p);
-  for (const b of world.ofKind("bullet")) drawBullet(ctx, interpolate(b, alpha, ARENA));
-  for (const s of world.ofKind("ship")) {
-    if (s.dead) continue;
-    const p = interpolateShip(s, alpha, ARENA);
-    drawShip(ctx, p, performance.now(), s === ship);
-    if (s.effects.has("shield")) drawShield(ctx, p);
-  }
-  for (const e of world.ofKind("explosion")) drawExplosion(ctx, e);
-  drawHud(ctx, view, stats, [
-    `jitter   ${stats.jitter.toFixed(2)} ms`,
-    `entities ${world.size}`,
-    `score    ${ship.score}`,
-    `effects  ${[...ship.effects.keys()].join(", ") || "-"}`,
-    `hp       ${ship.hp}${ship.dead ? ` (respawn ${ship.respawnIn.toFixed(1)}s)` : ""}`,
-    experiment ? `exp      ${experiment}` : "",
+  window.addEventListener("keydown", onKey);
+  actions([
+    [
+      "Скасувати (Esc)",
+      () => controller.abort(new DOMException("Cancelled by player", "AbortError")),
+    ],
   ]);
+  if (failMode === "abort")
+    setTimeout(() => controller.abort(new DOMException("Cancelled by player", "AbortError")), 700);
+
+  let progress = { done: 0, total: 0, status: [] };
+  const draw = () => drawLoading(ctx, view, progress);
+  const jobs = buildJobs(manifest, audio.context);
+  const started = performance.now();
+  try {
+    return await loadAll(jobs, {
+      signal: controller.signal,
+      sequential,
+      onProgress: (p) => {
+        progress = p;
+        draw();
+      },
+    });
+  } finally {
+    const ms = Math.round(performance.now() - started);
+    console.log(`assets ${sequential ? "sequential" : "concurrent"} ${ms} ms`);
+    window.removeEventListener("keydown", onKey);
+    overlay.replaceChildren();
+  }
 }
 
-const loop = createLoop({
-  simulate,
-  render,
-  scheduler: experiment === "interval" ? "interval" : "raf",
-  fixedStep: experiment !== "variable",
-});
-loop.start();
+async function loadWithRetry() {
+  for (;;) {
+    try {
+      const manifest = applyFailMode(await loadJson("/assets/manifest.json"));
+      return { manifest, assets: await loadAssets(manifest) };
+    } catch (error) {
+      const reason =
+        error.name === "AbortError"
+          ? "Завантаження скасовано"
+          : `Не вдалося завантажити: ${error.message}`;
+      console.warn(reason);
+      drawLoading(ctx, view, { done: 0, total: 0, status: [] }, reason);
+      await waitForClick("Спробувати ще раз");
+    }
+  }
+}
 
-if (probe) {
-  setInterval(() => {
-    const s = loop.stats;
-    console.log(
-      `stats steps/s=${s.stepsPerSecond} frames/s=${s.framesPerSecond} frame=${s.frameTime.toFixed(2)} jitter=${s.jitter.toFixed(2)} worst=${s.worstInterval.toFixed(1)}`,
+function pickRoom() {
+  if (probe) return Promise.resolve({ room: { arena: "nebula" }, name: "probe" });
+  const lobby = new Lobby();
+  const panel = document.createElement("div");
+  overlay.replaceChildren(panel);
+  const unmount = mountLobby(lobby, panel);
+  return new Promise((resolve) => {
+    lobby.addEventListener(
+      "join",
+      (e) => {
+        unmount();
+        resolve(e.detail);
+      },
+      { once: true },
     );
-  }, 1000);
+  });
 }
+
+async function boot() {
+  const { manifest, assets } = await loadWithRetry();
+  audio.setBuffers(assets.sounds);
+
+  const sprites = {};
+  for (const [name, image] of Object.entries(assets.sprites)) {
+    sprites[name] = { image, frames: manifest.sprites[name].frames };
+  }
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const { room, name } = await pickRoom();
+  await audio.unlock().catch(() => {});
+
+  const arena = assets.arenas[room.arena];
+  const game = startGame({
+    ctx,
+    view,
+    input,
+    audio,
+    sprites,
+    arena,
+    pilot: name,
+    experiment: gameExperiment(),
+  });
+  for (const f of assets.failures) game.hud.note(`Не завантажилось ${f.name}: ${f.error}`, 8);
+}
+
+boot();
