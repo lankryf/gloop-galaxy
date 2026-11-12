@@ -126,6 +126,9 @@ export function startOnlineGame({
     } else if (options.prediction) {
       predictor.reconcile(me, snapshot.ack, wells);
       netgraph.stats.correction = predictor.lastCorrection;
+    } else {
+      while (predictor.pending.length > 0 && predictor.pending[0].seq <= snapshot.ack)
+        predictor.pending.shift();
     }
 
     const shots = new Set();
@@ -230,7 +233,6 @@ export function startOnlineGame({
       }
     } else {
       predictor.pending.push(entry);
-      if (predictor.pending.length > 60) predictor.pending.shift();
     }
     stepLocalBullets();
 
