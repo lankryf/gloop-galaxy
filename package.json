@@ -19,11 +19,13 @@
     "test": "vitest run",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "typecheck": "npm run typecheck --workspaces",
-    "coverage": "vitest run --coverage"
+    "typecheck": "npm run typecheck --workspaces && tsc -p e2e",
+    "coverage": "vitest run --coverage",
+    "e2e": "playwright test"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.7",
+    "@playwright/test": "^1.65.0",
     "@types/node": "^26.6.6",
     "@vitest/coverage-v8": "^5.1.0",
     "fast-check": "^4.10.2",

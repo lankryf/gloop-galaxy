@@ -88,6 +88,7 @@ export interface OnlineGame {
   readonly predictor: Predictor;
   readonly buffer: SnapshotBuffer;
   readonly netgraph: Netgraph;
+  readonly shipId: EntityId;
 }
 
 const isAlive = (ship: ShipSnap | null): ship is ShipSnap =>
@@ -480,5 +481,13 @@ export function startOnlineGame({
 
   const loop = createLoop({ step: TICK_DT, simulate, render });
   loop.start();
-  return { loop, predictor, buffer, netgraph };
+  return {
+    loop,
+    predictor,
+    buffer,
+    netgraph,
+    get shipId() {
+      return myShip;
+    },
+  };
 }

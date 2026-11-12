@@ -26,3 +26,5 @@ dist-ssr
 .env
 *.ndjson
 coverage
+test-results
+playwright-report
