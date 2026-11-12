@@ -1,3 +1,5 @@
+import { Samples } from "./perf.ts";
+
 const MAX_FRAME = 0.25;
 
 export type Scheduler = "raf" | "interval";
@@ -13,6 +15,7 @@ export interface LoopStats {
 
 export interface Loop {
   readonly stats: LoopStats;
+  readonly frames: Samples;
   start(): void;
   stop(): void;
 }
@@ -44,6 +47,7 @@ export function createLoop({
   let framesInWindow = 0;
   let intervals: number[] = [];
 
+  const frames = new Samples();
   const stats: LoopStats = {
     stepsPerSecond: 0,
     framesPerSecond: 0,
@@ -89,6 +93,7 @@ export function createLoop({
     }
 
     stats.frameTime = now() - frameStart;
+    frames.push(stats.frameTime);
   }
 
   function onFrame(t: number): void {
@@ -99,6 +104,7 @@ export function createLoop({
 
   return {
     stats,
+    frames,
     start() {
       if (running) return;
       running = true;

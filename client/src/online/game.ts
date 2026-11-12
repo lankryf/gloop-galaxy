@@ -29,6 +29,8 @@ import type { Input } from "../input.ts";
 import type { Loop, LoopStats } from "../loop.ts";
 import { createLoop } from "../loop.ts";
 import type { Connection } from "../net/connection.ts";
+import type { Percentiles } from "../perf.ts";
+import { measure, measures } from "../perf.ts";
 import type { View } from "../render/canvas.ts";
 import { beginFrame } from "../render/canvas.ts";
 import type { ShipPose, Sprites } from "../render/draw.ts";
@@ -89,6 +91,7 @@ export interface OnlineGame {
   readonly buffer: SnapshotBuffer;
   readonly netgraph: Netgraph;
   readonly shipId: EntityId;
+  readonly measures: () => Record<string, Percentiles>;
 }
 
 const isAlive = (ship: ShipSnap | null): ship is ShipSnap =>
@@ -213,7 +216,8 @@ export function startOnlineGame({
       predictor.reset();
       localBullets = [];
     } else if (options.prediction) {
-      predictor.reconcile(me, snapshot.ack, wells);
+      const ship = me;
+      measure("reconcile", () => predictor.reconcile(ship, snapshot.ack, wells));
       netgraph.stats.correction = predictor.lastCorrection;
     } else {
       predictor.trim(snapshot.ack);
@@ -225,7 +229,8 @@ export function startOnlineGame({
 
   connection.events.on("binary", (data) => {
     try {
-      onSnapshot(decodeSnapshot(data), data.byteLength);
+      const snapshot = measure("decode", () => decodeSnapshot(data));
+      onSnapshot(snapshot, data.byteLength);
     } catch (error: unknown) {
       console.warn("bad snapshot", messageOf(error));
     }
@@ -479,13 +484,18 @@ export function startOnlineGame({
     }
   });
 
-  const loop = createLoop({ step: TICK_DT, simulate, render });
+  const loop = createLoop({
+    step: TICK_DT,
+    simulate: () => measure("simulate", simulate),
+    render: (alpha, stats) => measure("render", () => render(alpha, stats)),
+  });
   loop.start();
   return {
     loop,
     predictor,
     buffer,
     netgraph,
+    measures,
     get shipId() {
       return myShip;
     },
