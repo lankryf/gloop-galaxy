@@ -652,7 +652,7 @@ $${\color{red}\text{і зберегти як docs/img/lab07-ci.png; потім �
 
 ### Профілювання клієнта
 
-Сесія 30 с: я в кімнаті + 8 ботів, тримаю газ, поворот і постріл (тобто постійно вибухи і кулі), headless Chrome на тій самій віртуалці з 2 vCPU. Час кадру – з кільцевого буфера `Samples` у циклі (без алокацій), GC – з трейсу (`MinorGC`/`MajorGC`), алокації – sampling heap profiler з урахуванням уже зібраних об'єктів, self time – CPU-профайлер. Скрипт запуску лежить поза репо, сирі дані – у `docs/perf/client-before.json` і `client-after.json`, профілі – `docs/perf/*.cpuprofile`.
+Сесія 30 с: я в кімнаті + 8 ботів, тримаю газ, поворот і постріл (тобто постійно вибухи і кулі), headless Chrome на тій самій віртуалці з 2 vCPU. Час кадру – з кільцевого буфера `Samples` у циклі (без алокацій), GC – з трейсу (`MinorGC`/`MajorGC`), алокації – sampling heap profiler з урахуванням уже зібраних об'єктів, self time – CPU-профайлер. Запуск: `CHROME_PATH=/usr/bin/google-chrome node scripts/profile-client.mjs after 30 8` при запущених `npm run dev`; сирі дані – у `docs/perf/client-before.json` і `client-after.json`, профілі – `docs/perf/*.cpuprofile`.
 
 | 30 с, 8 ботів                  | до                                  | після                                     |
 | ------------------------------ | ----------------------------------- | ----------------------------------------- |
