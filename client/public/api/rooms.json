@@ -1,5 +1,0 @@
-[
-  { "id": "r1", "name": "Туманність Слимака", "arena": "nebula", "players": 0, "maxPlayers": 4 },
-  { "id": "r2", "name": "Космічне звалище", "arena": "junkyard", "players": 1, "maxPlayers": 4 },
-  { "id": "r3", "name": "Для новачків", "arena": "nebula", "players": 3, "maxPlayers": 8 }
-]

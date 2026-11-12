@@ -5,9 +5,11 @@ import { startGame } from "./game.js";
 import { createInput } from "./input.js";
 import { Lobby } from "./lobby/lobby.js";
 import { mountLobby } from "./lobby/view.js";
+import { Connection, socketUrl } from "./net/connection.js";
 import { setupCanvas } from "./render/canvas.js";
 import { drawLoading } from "./screens/loading.js";
 import { ARENA } from "./sim/arena.js";
+import { mountChat } from "./ui/chat.js";
 
 const canvas = document.getElementById("game");
 const overlay = document.getElementById("overlay");
@@ -83,12 +85,17 @@ async function loadWithRetry() {
   }
 }
 
-function pickRoom() {
+function pickRoom(message = "") {
   if (probe) return Promise.resolve({ room: { arena: "nebula" }, name: "probe" });
   const lobby = new Lobby();
   const panel = document.createElement("div");
   overlay.replaceChildren(panel);
   const unmount = mountLobby(lobby, panel);
+  if (message) {
+    const error = panel.querySelector(".error");
+    error.hidden = false;
+    error.textContent = message;
+  }
   return new Promise((resolve) => {
     lobby.addEventListener(
       "join",
@@ -99,6 +106,59 @@ function pickRoom() {
       { once: true },
     );
   });
+}
+
+function joinRoom(room, name) {
+  const connection = new Connection(socketUrl());
+  return new Promise((resolve, reject) => {
+    const controller = new AbortController();
+    const { signal } = controller;
+    connection.addEventListener("open", () => connection.send("join", { room: room.id, name }), {
+      signal,
+    });
+    connection.addEventListener(
+      "welcome",
+      (e) => {
+        controller.abort();
+        resolve({ connection, you: e.detail.you });
+      },
+      { signal },
+    );
+    connection.addEventListener(
+      "error",
+      (e) => {
+        controller.abort();
+        connection.close();
+        reject(new Error(e.detail.message));
+      },
+      { signal },
+    );
+    connection.addEventListener(
+      "reconnecting",
+      (e) => {
+        if (e.detail.attempt < 3) return;
+        controller.abort();
+        connection.close();
+        reject(new Error("сервер недоступний"));
+      },
+      { signal },
+    );
+    connection.connect();
+  });
+}
+
+async function enterRoom() {
+  let message = "";
+  for (;;) {
+    const { room, name } = await pickRoom(message);
+    if (probe) return { room, name, session: null };
+    try {
+      const session = await joinRoom(room, name);
+      return { room, name, session };
+    } catch (error) {
+      message = `Не вдалося увійти: ${error.message}`;
+    }
+  }
 }
 
 async function boot() {
@@ -116,7 +176,7 @@ async function boot() {
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const { room, name } = await pickRoom();
+  const { room, name, session } = await enterRoom();
   await audio.unlock().catch(() => {});
 
   const arena = assets.arenas[room.arena];
@@ -131,6 +191,20 @@ async function boot() {
     experiment: gameExperiment(),
   });
   for (const f of assets.failures) game.hud.note(`Не завантажилось ${f.name}: ${f.error}`, 8);
+
+  if (session) {
+    let you = session.you;
+    session.connection.addEventListener("welcome", (e) => {
+      you = e.detail.you;
+    });
+    session.connection.addEventListener("open", () =>
+      session.connection.send("join", { room: room.id, name }),
+    );
+    session.connection.addEventListener("shutdown", () =>
+      game.hud.note("Сервер перезапускається", 6),
+    );
+    mountChat(overlay, session.connection, { you: () => you });
+  }
 }
 
 boot();

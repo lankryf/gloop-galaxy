@@ -4,7 +4,7 @@ export class Lobby extends EventTarget {
   #controller = null;
   #timer = 0;
 
-  constructor({ url = "/api/rooms.json", interval = 3000, timeout = 4000 } = {}) {
+  constructor({ url = "/api/rooms", interval = 3000, timeout = 4000 } = {}) {
     super();
     this.url = url;
     this.interval = interval;
@@ -46,6 +46,19 @@ export class Lobby extends EventTarget {
     clearInterval(this.#timer);
     this.#controller?.abort(new DOMException("Left the lobby", "AbortError"));
     this.#controller = null;
+  }
+
+  async create(name, arena) {
+    const response = await fetch(this.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, arena }),
+      signal: AbortSignal.timeout(this.timeout),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error ?? `HTTP ${response.status}`);
+    await this.refresh();
+    return body;
   }
 
   join(roomId, name) {

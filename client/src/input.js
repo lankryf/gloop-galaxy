@@ -3,7 +3,12 @@ export function createInput(target = window) {
   const pressed = new Set();
   const handlers = new Map();
 
+  function typing(e) {
+    return e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+  }
+
   function onKeyDown(e) {
+    if (typing(e)) return;
     if (!down.has(e.code)) {
       pressed.add(e.code);
       handlers.get(e.code)?.();
@@ -12,6 +17,7 @@ export function createInput(target = window) {
   }
 
   function onKeyUp(e) {
+    if (typing(e)) return;
     down.delete(e.code);
   }
 

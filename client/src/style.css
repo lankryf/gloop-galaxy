@@ -141,3 +141,86 @@ body {
   background: #ffd23f;
   cursor: pointer;
 }
+
+.chat {
+  pointer-events: auto;
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  width: 340px;
+  font-size: 14px;
+}
+
+.chat-log {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  text-shadow: 1px 1px 0 #1a0b26;
+}
+
+.chat-log .own {
+  color: #8dff3a;
+}
+
+.chat-log .system {
+  color: #b49ad1;
+  font-style: italic;
+}
+
+.chat-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 3px solid #1a0b26;
+  background: rgba(244, 233, 255, 0.85);
+}
+
+.chat-input:not(:focus) {
+  opacity: 0.45;
+}
+
+.chat-status {
+  color: #ffd23f;
+  margin-top: 4px;
+  min-height: 1em;
+}
+
+.roster {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  background: rgba(20, 8, 36, 0.7);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.roster:empty {
+  display: none;
+}
+
+.create-room {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.create-room input {
+  flex: 1;
+  min-width: 0;
+}
+
+.create-room select,
+.create-room button.small {
+  font: inherit;
+  border-radius: 10px;
+  border: 3px solid #1a0b26;
+  padding: 4px 8px;
+  width: auto;
+  font-size: 14px;
+}

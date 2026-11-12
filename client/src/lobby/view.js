@@ -23,6 +23,14 @@ export function mountLobby(lobby, root) {
       <label>Позивний <input name="pilot" maxlength="16" autocomplete="off" /></label>
       <div class="rooms-head"><span>Кімнати</span><span class="status"></span></div>
       <ul class="rooms"></ul>
+      <form class="create-room">
+        <input name="room" maxlength="32" placeholder="Нова кімната" />
+        <select name="arena">
+          <option value="nebula">Туманність</option>
+          <option value="junkyard">Звалище</option>
+        </select>
+        <button class="small">+</button>
+      </form>
       <button class="join" disabled>Летіти!</button>
       <p class="error" hidden></p>
     </div>`;
@@ -74,6 +82,27 @@ export function mountLobby(lobby, root) {
       status.textContent = "";
       error.hidden = false;
       error.textContent = `Не вдалося оновити список: ${e.detail.message}`;
+    },
+    { signal },
+  );
+
+  const form = root.querySelector(".create-room");
+  form.addEventListener(
+    "submit",
+    async (e) => {
+      e.preventDefault();
+      const name = form.room.value.trim();
+      if (!name) return;
+      try {
+        const room = await lobby.create(name, form.arena.value);
+        selected = room.id;
+        join.disabled = false;
+        form.room.value = "";
+        render(lobby.rooms);
+      } catch (err) {
+        error.hidden = false;
+        error.textContent = `Не вдалося створити кімнату: ${err.message}`;
+      }
     },
     { signal },
   );

@@ -26,12 +26,16 @@ export function startGame({ ctx, view, input, audio, sprites, arena, pilot, expe
   const world = new World({ seed: arena.seed });
   const hud = createHud(world);
 
-  const ship = world.spawn(
-    new Ship({ pos: new Vector2(ARENA.width / 2, ARENA.height / 2), name: pilot }),
-  );
-  const dummy = world.spawn(new Ship({ pos: new Vector2(300, 200), angle: 0, name: "dummy" }));
-  dummy.controls = { thrust: true, left: true, right: false, fire: false };
   for (const config of arena.wells ?? []) world.spawn(GravityWell.fromConfig(config));
+  const start = experiment.probe
+    ? { x: ARENA.width / 2, y: ARENA.height / 2 }
+    : world.findSafeSpot(40, ARENA);
+  const ship = world.spawn(new Ship({ pos: new Vector2(start.x, start.y), name: pilot }));
+  const dummySpot = world.findSafeSpot(40, ARENA);
+  const dummy = world.spawn(
+    new Ship({ pos: new Vector2(dummySpot.x, dummySpot.y), angle: 0, name: "dummy" }),
+  );
+  dummy.controls = { thrust: true, left: true, right: false, fire: false };
   for (let i = 0; i < arena.asteroids; i++) world.spawn(Asteroid.random(world.rng, ARENA, world));
   for (let i = 0; i < arena.pickups; i++) world.spawn(Pickup.random(world, ARENA));
 
