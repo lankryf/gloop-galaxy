@@ -11,7 +11,7 @@ const S13 = 1 / 6227020800;
 const S15 = -1 / 1307674368000;
 const S17 = 1 / 355687428096000;
 
-export function sin(x) {
+export function sin(x: number): number {
   let r = x - Math.round(x / TAU) * TAU;
   if (r > HALF_PI) r = PI - r;
   else if (r < -HALF_PI) r = -PI - r;
@@ -24,11 +24,11 @@ export function sin(x) {
   );
 }
 
-export function cos(x) {
+export function cos(x: number): number {
   return sin(x + HALF_PI);
 }
 
-function atanSmall(z) {
+function atanSmall(z: number): number {
   const z2 = z * z;
   let term = z;
   let sum = z;
@@ -39,7 +39,7 @@ function atanSmall(z) {
   return sum;
 }
 
-export function atan(z) {
+export function atan(z: number): number {
   if (z > 1) return HALF_PI - atan(1 / z);
   if (z < -1) return -HALF_PI - atan(1 / z);
   const once = z / (1 + Math.sqrt(1 + z * z));
@@ -47,7 +47,7 @@ export function atan(z) {
   return 4 * atanSmall(twice);
 }
 
-export function atan2(y, x) {
+export function atan2(y: number, x: number): number {
   if (x > 0) return atan(y / x);
   if (x < 0) return y >= 0 ? atan(y / x) + PI : atan(y / x) - PI;
   if (y > 0) return HALF_PI;
@@ -55,6 +55,6 @@ export function atan2(y, x) {
   return 0;
 }
 
-export function hypot(x, y) {
+export function hypot(x: number, y: number): number {
   return Math.sqrt(x * x + y * y);
 }

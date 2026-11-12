@@ -1,11 +1,13 @@
-import { ARENA } from "./arena.js";
-import { Asteroid } from "./asteroid.js";
-import { Ship } from "./ship.js";
-import { Vector2 } from "./vector.js";
-import { GravityWell } from "./well.js";
-import { World } from "./world.js";
+import { seq } from "../ids.ts";
+import { ARENA } from "./arena.ts";
+import { Asteroid } from "./asteroid.ts";
+import type { Controls } from "./ship.ts";
+import { Ship } from "./ship.ts";
+import { Vector2 } from "./vector.ts";
+import { GravityWell } from "./well.ts";
+import { World } from "./world.ts";
 
-export function scriptedInput(step, lane) {
+export function scriptedInput(step: number, lane: number): Controls {
   const phase = (step + lane * 37) % 180;
   return {
     thrust: phase < 120,
@@ -15,7 +17,15 @@ export function scriptedInput(step, lane) {
   };
 }
 
-export function runScenario({ steps = 1000, dt = 1 / 30, seed = 7 } = {}) {
+export function runScenario({
+  steps = 1000,
+  dt = 1 / 30,
+  seed = 7,
+}: {
+  steps?: number;
+  dt?: number;
+  seed?: number;
+} = {}): World {
   const world = new World({ seed });
   world.spawn(GravityWell.fromConfig({ type: "blackhole", x: 0.66, y: 0.62, drift: [-14, 9] }));
   world.spawn(GravityWell.fromConfig({ type: "planet", x: 0.3, y: 0.38 }));
@@ -26,7 +36,7 @@ export function runScenario({ steps = 1000, dt = 1 / 30, seed = 7 } = {}) {
   });
   for (let step = 0; step < steps; step++) {
     ships.forEach((ship, lane) => {
-      ship.steer(scriptedInput(step, lane), dt, world, step + 1);
+      ship.steer(scriptedInput(step, lane), dt, world, seq(step + 1));
     });
     world.step(dt);
   }

@@ -7,6 +7,10 @@
     "./*": "./*"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc -p . && tsc -p test"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
   }
 }

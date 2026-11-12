@@ -1,6 +1,13 @@
-export function createRng(seed = 1) {
+export interface Rng {
+  next(): number;
+  range(min: number, max: number): number;
+  int(min: number, max: number): number;
+  pick<T>(items: readonly [T, ...T[]]): T;
+}
+
+export function createRng(seed = 1): Rng {
   let s = seed >>> 0;
-  const next = () => {
+  const next = (): number => {
     s = (s + 0x6d2b79f5) >>> 0;
     let t = s;
     t = Math.imul(t ^ (t >>> 15), t | 1);
@@ -11,6 +18,6 @@ export function createRng(seed = 1) {
     next,
     range: (min, max) => min + next() * (max - min),
     int: (min, max) => Math.floor(min + next() * (max - min + 1)),
-    pick: (items) => items[Math.floor(next() * items.length)],
+    pick: (items) => items[Math.floor(next() * items.length)] ?? items[0],
   };
 }

@@ -1,4 +1,6 @@
-export function hashNumbers(numbers) {
+import type { AnyEntity } from "./kinds.ts";
+
+export function hashNumbers(numbers: Iterable<number>): string {
   let h = 0x811c9dc5;
   const view = new DataView(new ArrayBuffer(8));
   for (const n of numbers) {
@@ -11,8 +13,8 @@ export function hashNumbers(numbers) {
   return h.toString(16).padStart(8, "0");
 }
 
-export function hashWorld(world) {
-  const numbers = [];
+export function hashWorld(world: Iterable<AnyEntity>): string {
+  const numbers: number[] = [];
   for (const e of world) {
     numbers.push(e.id, e.pos.x, e.pos.y, e.vel.x, e.vel.y, e.angle, e.alive ? 1 : 0);
   }

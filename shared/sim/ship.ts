@@ -1,11 +1,16 @@
-import { ARENA, wrap } from "./arena.js";
-import { homing } from "./behaviors.js";
-import { BULLET, Bullet } from "./bullet.js";
-import { Entity } from "./entity.js";
-import { cos, hypot, sin } from "./fmath.js";
-import { gravityAt, wellFields } from "./gravity.js";
-import { EFFECT_DURATION } from "./pickup.js";
-import { Vector2 } from "./vector.js";
+import type { Seq } from "../ids.ts";
+import { seq } from "../ids.ts";
+import { ARENA, wrap } from "./arena.ts";
+import { homing } from "./behaviors.ts";
+import { BULLET, Bullet } from "./bullet.ts";
+import { Entity } from "./entity.ts";
+import { cos, hypot, sin } from "./fmath.ts";
+import type { WellField } from "./gravity.ts";
+import { gravityAt, wellFields } from "./gravity.ts";
+import type { PickupType } from "./pickup.ts";
+import { EFFECT_DURATION } from "./pickup.ts";
+import { Vector2 } from "./vector.ts";
+import type { World } from "./world.ts";
 
 export const SHIP = {
   turnSpeed: 3.6,
@@ -19,7 +24,28 @@ export const SHIP = {
   respawnDelay: 2,
 };
 
-export function integrate(ship, input, dt) {
+export interface Controls {
+  readonly thrust: boolean;
+  readonly left: boolean;
+  readonly right: boolean;
+  readonly fire: boolean;
+}
+
+export const IDLE: Controls = { thrust: false, left: false, right: false, fire: false };
+
+export interface ShipState {
+  readonly x: number;
+  readonly y: number;
+  readonly vx: number;
+  readonly vy: number;
+  readonly angle: number;
+}
+
+export interface MovedShip extends ShipState {
+  readonly thrust: boolean;
+}
+
+export function integrate(ship: ShipState, input: Controls, dt: number): MovedShip {
   let { x, y, vx, vy, angle } = ship;
 
   const turn = (input.right ? 1 : 0) - (input.left ? 1 : 0);
@@ -43,17 +69,17 @@ export function integrate(ship, input, dt) {
   x = wrap(x + vx * dt, ARENA.width);
   y = wrap(y + vy * dt, ARENA.height);
 
-  return { x, y, vx, vy, angle, thrust: Boolean(input.thrust) };
+  return { x, y, vx, vy, angle, thrust: input.thrust };
 }
 
-export function quantizeAngle(angle) {
+export function quantizeAngle(angle: number): number {
   let a = angle % (Math.PI * 2);
   if (a > Math.PI) a -= Math.PI * 2;
   if (a <= -Math.PI) a += Math.PI * 2;
   return Math.round(a * 10000) / 10000;
 }
 
-export function quantizeShip(state) {
+export function quantizeShip<T extends ShipState>(state: T): T {
   return {
     ...state,
     x: Math.fround(state.x),
@@ -64,38 +90,52 @@ export function quantizeShip(state) {
   };
 }
 
-export function shipPhysics(state, input, dt, wells) {
-  const next = integrate(state, input, dt);
-  if (wells.length > 0) {
-    const { ax, ay } = gravityAt(next.x, next.y, wells);
-    next.vx += ax * dt;
-    next.vy += ay * dt;
-  }
-  return quantizeShip(next);
+export function shipPhysics(
+  state: ShipState,
+  input: Controls,
+  dt: number,
+  wells: readonly WellField[],
+): MovedShip {
+  const moved = integrate(state, input, dt);
+  if (wells.length === 0) return quantizeShip(moved);
+  const { ax, ay } = gravityAt(moved.x, moved.y, wells);
+  return quantizeShip({ ...moved, vx: moved.vx + ax * dt, vy: moved.vy + ay * dt });
 }
 
 export class Ship extends Entity {
+  readonly kind = "ship";
   #hp = SHIP.maxHp;
+  readonly name: string;
+  readonly inputDriven: boolean;
+  controls: Controls = IDLE;
+  thrust = false;
+  cooldown = 0;
+  score = 0;
+  deaths = 0;
+  dead = false;
+  respawnIn = 0;
+  readonly effects = new Map<PickupType, number>();
 
-  constructor({ pos, angle = -Math.PI / 2, name = "pilot", inputDriven = false }) {
-    super({ kind: "ship", pos, angle: quantizeAngle(angle), radius: SHIP.radius });
+  constructor({
+    pos,
+    angle = -Math.PI / 2,
+    name = "pilot",
+    inputDriven = false,
+  }: { pos: Vector2; angle?: number; name?: string; inputDriven?: boolean }) {
+    super({ pos, angle: quantizeAngle(angle), radius: SHIP.radius });
     this.name = name;
     this.inputDriven = inputDriven;
-    this.controls = { thrust: false, left: false, right: false, fire: false };
-    this.thrust = false;
-    this.cooldown = 0;
-    this.score = 0;
-    this.deaths = 0;
-    this.dead = false;
-    this.respawnIn = 0;
-    this.effects = new Map();
   }
 
-  get hp() {
+  get hp(): number {
     return this.#hp;
   }
 
-  damage(amount) {
+  get state(): ShipState {
+    return { x: this.pos.x, y: this.pos.y, vx: this.vel.x, vy: this.vel.y, angle: this.angle };
+  }
+
+  damage(amount: number): boolean {
     if (this.dead || this.effects.has("shield")) return false;
     this.#hp = Math.max(0, this.#hp - amount);
     if (this.#hp > 0) return false;
@@ -103,14 +143,14 @@ export class Ship extends Entity {
     return true;
   }
 
-  kill() {
+  kill(): boolean {
     if (this.dead) return false;
     this.#hp = 0;
     this.#die();
     return true;
   }
 
-  #die() {
+  #die(): void {
     this.dead = true;
     this.collidable = false;
     this.effects.clear();
@@ -118,7 +158,7 @@ export class Ship extends Entity {
     this.respawnIn = SHIP.respawnDelay;
   }
 
-  respawn(world) {
+  respawn(world: World): void {
     const spot = world.findSafeSpot(this.radius, ARENA);
     this.pos = new Vector2(spot.x, spot.y);
     this.prevPos = this.pos;
@@ -128,27 +168,23 @@ export class Ship extends Entity {
     this.collidable = true;
   }
 
-  applyPickup(type) {
+  applyPickup(type: PickupType): void {
     this.effects.set(type, EFFECT_DURATION[type]);
   }
 
-  get state() {
-    return { x: this.pos.x, y: this.pos.y, vx: this.vel.x, vy: this.vel.y, angle: this.angle };
-  }
-
-  fire(world, shot = 0) {
+  fire(world: World, shot: Seq = seq(0)): void {
     const nose = this.pos.add(Vector2.fromAngle(this.angle, this.radius + 8));
     const vel = this.vel.add(Vector2.fromAngle(this.angle, BULLET.speed));
     const bullet = new Bullet({ pos: nose, vel, ownerId: this.id, shot });
     if (this.effects.has("homing")) {
-      bullet.behaviors.push(homing({ targetKind: "ship", ignoreId: this.id, turnRate: 4 }));
+      bullet.behaviors.push(homing({ ignoreId: this.id, turnRate: 4 }));
     }
     world.spawn(bullet);
     world.emit("fired", { shipId: this.id, x: nose.x, y: nose.y });
     this.cooldown = this.effects.has("rapid") ? SHIP.rapidCooldown : SHIP.fireCooldown;
   }
 
-  tick(dt, world) {
+  tick(dt: number, world: World): void {
     for (const [type, left] of this.effects) {
       if (left - dt <= 0) this.effects.delete(type);
       else this.effects.set(type, left - dt);
@@ -158,7 +194,7 @@ export class Ship extends Entity {
     if (this.respawnIn <= 0) this.respawn(world);
   }
 
-  steer(controls, dt, world, shot = 0) {
+  steer(controls: Controls, dt: number, world: World, shot: Seq = seq(0)): void {
     if (this.dead) return;
     const next = shipPhysics(this.state, controls, dt, wellFields(world));
     this.pos = new Vector2(next.x, next.y);
@@ -170,7 +206,7 @@ export class Ship extends Entity {
     if (controls.fire && this.cooldown === 0) this.fire(world, shot);
   }
 
-  settle() {
+  override settle(): void {
     if (this.dead) return;
     const q = quantizeShip(this.state);
     this.pos = new Vector2(q.x, q.y);
@@ -178,7 +214,7 @@ export class Ship extends Entity {
     this.angle = q.angle;
   }
 
-  update(dt, world) {
+  override update(dt: number, world: World): void {
     this.tick(dt, world);
     if (!this.inputDriven) this.steer(this.controls, dt, world);
   }

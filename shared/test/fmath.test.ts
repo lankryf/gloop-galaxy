@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { atan2, cos, hypot, sin } from "../sim/fmath.js";
+import { atan2, cos, hypot, sin } from "../sim/fmath.ts";
 
 test("sin and cos are close to Math within 1e-12", () => {
   for (let x = -20; x <= 20; x += 0.0137) {

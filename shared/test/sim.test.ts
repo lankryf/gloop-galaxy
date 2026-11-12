@@ -1,17 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ARENA } from "../sim/arena.js";
-import { hashWorld } from "../sim/hash.js";
-import { Pickup } from "../sim/pickup.js";
-import { runScenario } from "../sim/scenario.js";
-import { quantizeShip, Ship, shipPhysics } from "../sim/ship.js";
-import { Vector2 } from "../sim/vector.js";
-import { GravityWell } from "../sim/well.js";
-import { World } from "../sim/world.js";
+import { entityId } from "../ids.ts";
+import { ARENA } from "../sim/arena.ts";
+import { hashWorld } from "../sim/hash.ts";
+import { Pickup } from "../sim/pickup.ts";
+import { runScenario } from "../sim/scenario.ts";
+import { quantizeShip, Ship, shipPhysics } from "../sim/ship.ts";
+import { Vector2 } from "../sim/vector.ts";
+import { GravityWell } from "../sim/well.ts";
+import { World } from "../sim/world.ts";
 
 test("sim modules load in Node without DOM", () => {
-  assert.equal(typeof globalThis.document, "undefined");
-  assert.equal(typeof globalThis.window, "undefined");
+  assert.equal("document" in globalThis, false);
+  assert.equal("window" in globalThis, false);
   assert.ok(new World());
 });
 
@@ -33,7 +34,9 @@ test("shipPhysics is what the server applies to an input-driven ship", () => {
   world.spawn(GravityWell.fromConfig({ type: "planet", x: 0.5, y: 0.5 }));
   const ship = world.spawn(new Ship({ pos: new Vector2(500, 300), inputDriven: true }));
   let predicted = quantizeShip(ship.state);
-  const wells = [world.get(1).field];
+  const planet = world.get(entityId(1));
+  assert.ok(planet?.kind === "well");
+  const wells = [planet.field];
   for (let i = 0; i < 60; i++) {
     const input = { thrust: i < 40, left: i % 7 === 0, right: false, fire: false };
     predicted = shipPhysics(predicted, input, 1 / 30, wells);
@@ -47,7 +50,7 @@ test("shipPhysics is what the server applies to an input-driven ship", () => {
 
 test("entity ids are small and unique per world", () => {
   const world = new World();
-  const ids = new Set();
+  const ids = new Set<number>();
   for (let i = 0; i < 500; i++)
     ids.add(world.spawn(new Pickup({ pos: new Vector2(), type: "rapid" })).id);
   assert.equal(ids.size, 500);
@@ -59,7 +62,7 @@ test("a black hole swallows a ship that sits still next to it", () => {
   world.spawn(new GravityWell({ type: "blackhole", pos: new Vector2(800, 450) }));
   const ship = world.spawn(new Ship({ pos: new Vector2(700, 450) }));
   let swallowed = false;
-  world.addEventListener("swallowed", () => {
+  world.events.on("swallowed", () => {
     swallowed = true;
   });
   for (let i = 0; i < 120 && !swallowed; i++) world.step(1 / 30);
@@ -71,7 +74,7 @@ test("ships wrap around the arena", () => {
   const world = new World();
   const ship = world.spawn(new Ship({ pos: new Vector2(ARENA.width - 1, 100), angle: 0 }));
   ship.vel = new Vector2(400, 0);
-  ship.controls.thrust = true;
+  ship.controls = { ...ship.controls, thrust: true };
   world.step(1 / 30);
   assert.ok(ship.pos.x < 50);
 });
