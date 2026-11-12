@@ -246,4 +246,7 @@ async function boot(): Promise<void> {
   });
 }
 
-boot();
+boot().catch((error: unknown) => {
+  console.error(error);
+  drawLoading(ctx, view, lastProgress, "Щось зламалось", messageOf(error));
+});

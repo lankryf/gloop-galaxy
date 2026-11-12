@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/node_modules", "!**/logs", "!**/*.md"]
+    "includes": ["**", "!**/dist", "!**/node_modules", "!**/logs", "!**/*.md", "!**/coverage"]
   },
   "formatter": {
     "indentStyle": "space",
@@ -25,6 +25,10 @@
       "preset": "recommended",
       "correctness": {
         "noVoidTypeReturn": "off"
+      },
+      "nursery": {
+        "noFloatingPromises": "error",
+        "noMisusedPromises": "error"
       }
     }
   }

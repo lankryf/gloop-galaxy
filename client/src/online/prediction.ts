@@ -49,6 +49,26 @@ export function wellsAt(
   }));
 }
 
+export function replayInputs(
+  serverShip: ShipState,
+  pending: readonly PendingInput[],
+  wells: readonly MovingWell[],
+  dt: number,
+): MovedShip {
+  let state: MovedShip = quantizeShip({
+    x: serverShip.x,
+    y: serverShip.y,
+    vx: serverShip.vx,
+    vy: serverShip.vy,
+    angle: serverShip.angle,
+    thrust: false,
+  });
+  pending.forEach((input, i) => {
+    state = shipPhysics(state, input.controls, dt, wellsAt(wells, i + 1, dt));
+  });
+  return state;
+}
+
 export class Predictor {
   readonly dt: number;
   readonly smoothing: number;
@@ -85,17 +105,7 @@ export class Predictor {
   reconcile(serverShip: ShipState, ack: Seq, wells: readonly MovingWell[]): void {
     this.trim(ack);
 
-    let state: MovedShip = quantizeShip({
-      x: serverShip.x,
-      y: serverShip.y,
-      vx: serverShip.vx,
-      vy: serverShip.vy,
-      angle: serverShip.angle,
-      thrust: false,
-    });
-    this.pending.forEach((input, i) => {
-      state = shipPhysics(state, input.controls, this.dt, wellsAt(wells, i + 1, this.dt));
-    });
+    const state = replayInputs(serverShip, this.pending, wells, this.dt);
 
     let error = 0;
     if (!this.state || !this.previous) {

@@ -1,6 +1,12 @@
 import fc from "fast-check";
 import { describe, expect, test } from "vitest";
-import { CodecError, decodeInput, decodeSnapshot, encodeInput, encodeSnapshot } from "../codec/binary.ts";
+import {
+  CodecError,
+  decodeInput,
+  decodeSnapshot,
+  encodeInput,
+  encodeSnapshot,
+} from "../codec/binary.ts";
 import type { EntityId } from "../ids.ts";
 import { entityId, seq, tick } from "../ids.ts";
 import type { ClientMessage, EntitySnap, NetEvent, Snapshot } from "../protocol.ts";
@@ -118,8 +124,15 @@ const snapshot: fc.Arbitrary<Snapshot> = fc.record({
   events: fc.array(event, { maxLength: 20 }),
 });
 
-const SIZE: Record<EntitySnap["kind"], number> = { ship: 26, bullet: 25, asteroid: 15, pickup: 12, well: 24 };
-const close = (a: number, b: number, eps: number) => Math.abs(a - b) <= eps * Math.max(1, Math.abs(b));
+const SIZE: Record<EntitySnap["kind"], number> = {
+  ship: 26,
+  bullet: 25,
+  asteroid: 15,
+  pickup: 12,
+  well: 24,
+};
+const close = (a: number, b: number, eps: number) =>
+  Math.abs(a - b) <= eps * Math.max(1, Math.abs(b));
 
 describe("binary codec", () => {
   test("round trip keeps every field within float32 / angle precision", () => {
@@ -136,9 +149,10 @@ describe("binary codec", () => {
           expect(d?.id).toBe(e.id);
           expect(close(d?.x ?? Number.NaN, e.x, 1e-6)).toBe(true);
           expect(close(d?.y ?? Number.NaN, e.y, 1e-6)).toBe(true);
-          if (d && "angle" in d && "angle" in e) expect(Math.abs(d.angle - e.angle)).toBeLessThanOrEqual(5e-5 + 1e-9);
+          if (d && "angle" in d && "angle" in e)
+            expect(Math.abs(d.angle - e.angle)).toBeLessThanOrEqual(5e-5 + 1e-9);
         });
-        snap.events.forEach((e, i) => expect(back.events[i]?.type).toBe(e.type));
+        expect(back.events.map((e) => e.type)).toEqual(snap.events.map((e) => e.type));
       }),
     );
   });
@@ -146,7 +160,8 @@ describe("binary codec", () => {
   test("encoded length matches the layout in docs/protocol.md", () => {
     fc.assert(
       fc.property(snapshot, (snap) => {
-        const expected = 12 + snap.entities.reduce((s, e) => s + SIZE[e.kind], 0) + 1 + 12 * snap.events.length;
+        const expected =
+          12 + snap.entities.reduce((s, e) => s + SIZE[e.kind], 0) + 1 + 12 * snap.events.length;
         expect(encodeSnapshot(snap).byteLength).toBe(expected);
       }),
     );
@@ -182,7 +197,10 @@ describe("binary codec", () => {
   });
 
   test("input batches round trip exactly", () => {
-    const record = fc.record({ seq: u32.map(seq), buttons: fc.integer({ min: 0, max: MAX_BUTTONS }) });
+    const record = fc.record({
+      seq: u32.map(seq),
+      buttons: fc.integer({ min: 0, max: MAX_BUTTONS }),
+    });
     fc.assert(
       fc.property(fc.array(record, { minLength: 1, maxLength: 16 }), (inputs) => {
         expect(decodeInput(encodeInput(inputs))).toEqual(inputs);
@@ -203,23 +221,32 @@ describe("arena", () => {
   });
 
   test("ships stay inside the arena over 1000 random input steps", () => {
-    const controls = fc.record({ thrust: fc.boolean(), left: fc.boolean(), right: fc.boolean(), fire: fc.boolean() });
+    const controls = fc.record({
+      thrust: fc.boolean(),
+      left: fc.boolean(),
+      right: fc.boolean(),
+      fire: fc.boolean(),
+    });
     fc.assert(
-      fc.property(fc.integer({ min: 1, max: 1000 }), fc.array(controls, { minLength: 1000, maxLength: 1000 }), (seed, inputs) => {
-        const world = new World({ seed });
-        world.spawn(GravityWell.fromConfig({ type: "blackhole", x: 0.5, y: 0.5 }));
-        const ship = world.spawn(new Ship({ pos: new Vector2(100, 100), inputDriven: true }));
-        inputs.forEach((input, i) => {
-          ship.steer(input, 1 / 30, world, seq(i + 1));
-          world.step(1 / 30);
-          for (const e of world) {
-            expect(e.pos.x).toBeGreaterThanOrEqual(0);
-            expect(e.pos.x).toBeLessThan(ARENA.width);
-            expect(e.pos.y).toBeGreaterThanOrEqual(0);
-            expect(e.pos.y).toBeLessThan(ARENA.height);
-          }
-        });
-      }),
+      fc.property(
+        fc.integer({ min: 1, max: 1000 }),
+        fc.array(controls, { minLength: 1000, maxLength: 1000 }),
+        (seed, inputs) => {
+          const world = new World({ seed });
+          world.spawn(GravityWell.fromConfig({ type: "blackhole", x: 0.5, y: 0.5 }));
+          const ship = world.spawn(new Ship({ pos: new Vector2(100, 100), inputDriven: true }));
+          inputs.forEach((input, i) => {
+            ship.steer(input, 1 / 30, world, seq(i + 1));
+            world.step(1 / 30);
+            for (const e of world) {
+              expect(e.pos.x).toBeGreaterThanOrEqual(0);
+              expect(e.pos.x).toBeLessThan(ARENA.width);
+              expect(e.pos.y).toBeGreaterThanOrEqual(0);
+              expect(e.pos.y).toBeLessThan(ARENA.height);
+            }
+          });
+        },
+      ),
       { numRuns: 25 },
     );
   });
@@ -235,17 +262,28 @@ describe("parseClientMessage", () => {
       name,
       codec: fc.constantFrom("json" as const, "binary" as const),
     }),
-    fc.record({ v: fc.constant(PROTOCOL_VERSION), type: fc.constant("chat" as const), text: fc.string({ minLength: 1, maxLength: 200 }) }),
+    fc.record({
+      v: fc.constant(PROTOCOL_VERSION),
+      type: fc.constant("chat" as const),
+      text: fc.string({ minLength: 1, maxLength: 200 }),
+    }),
     fc.record({ v: fc.constant(PROTOCOL_VERSION), type: fc.constant("leave" as const) }),
     fc.record({
       v: fc.constant(PROTOCOL_VERSION),
       type: fc.constant("input" as const),
-      inputs: fc.array(fc.record({ seq: u32.map(seq), buttons: fc.integer({ min: 0, max: MAX_BUTTONS }) }), {
-        minLength: 1,
-        maxLength: 16,
-      }),
+      inputs: fc.array(
+        fc.record({ seq: u32.map(seq), buttons: fc.integer({ min: 0, max: MAX_BUTTONS }) }),
+        {
+          minLength: 1,
+          maxLength: 16,
+        },
+      ),
     }),
-    fc.record({ v: fc.constant(PROTOCOL_VERSION), type: fc.constant("ping" as const), t: fc.double({ noNaN: true, noDefaultInfinity: true }) }),
+    fc.record({
+      v: fc.constant(PROTOCOL_VERSION),
+      type: fc.constant("ping" as const),
+      t: fc.double({ noNaN: true, noDefaultInfinity: true }),
+    }),
   );
 
   test("accepts every valid message", () => {
