@@ -1,8 +1,9 @@
+import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 import { entityId } from "../ids.ts";
 import { Asteroid } from "../sim/asteroid.ts";
 import { BULLET, Bullet } from "../sim/bullet.ts";
-import { findCollisions } from "../sim/collision.ts";
+import { bruteForce, findCollisions, spatialHash } from "../sim/collision.ts";
 import { createRng } from "../sim/random.ts";
 import { Vector2 } from "../sim/vector.ts";
 import { World } from "../sim/world.ts";
@@ -53,5 +54,30 @@ describe("findCollisions", () => {
     world.events.on("hit", () => hits++);
     for (let i = 0; i < 15; i++) world.step(dt);
     expect(hits).toBe(1);
+  });
+});
+
+describe("spatial hash", () => {
+  const circle = fc.record({
+    x: fc.double({ min: -50, max: 1650, noNaN: true }),
+    y: fc.double({ min: -50, max: 950, noNaN: true }),
+    r: fc.integer({ min: 2, max: 140 }),
+  });
+
+  test("finds exactly the same pairs in the same order as brute force", () => {
+    fc.assert(
+      fc.property(
+        fc.array(circle, { maxLength: 120 }),
+        fc.constantFrom(16, 64, 200),
+        (circles, cell) => {
+          const rocks = circles.map((c) => rock(c.x, c.y, c.r));
+          const index = new Map<unknown, number>(rocks.map((r, i) => [r, i]));
+          const ids = (pairs: readonly (readonly [unknown, unknown])[]) =>
+            pairs.map(([a, b]) => [index.get(a), index.get(b)]);
+          expect(ids(spatialHash(cell, 0)(rocks))).toEqual(ids(bruteForce(rocks)));
+        },
+      ),
+      { numRuns: 200 },
+    );
   });
 });

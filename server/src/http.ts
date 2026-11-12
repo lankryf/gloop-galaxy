@@ -26,6 +26,9 @@ const MIME: Readonly<Record<string, string>> = {
 
 const MAX_BODY = 4 * 1024;
 
+let lastElu = performance.eventLoopUtilization();
+let lastCpu = { usage: process.cpuUsage(), at: performance.now() };
+
 const AddBotsSchema = z.object({ count: z.number().int().min(1).max(16) });
 
 const NewRoomSchema = z.object({
@@ -175,7 +178,21 @@ async function route(
   }
 
   if (url.pathname === "/api/stats" && req.method === "GET") {
-    return json(res, 200, { matches: rooms.stats(), memory: process.memoryUsage().rss });
+    const elu = performance.eventLoopUtilization();
+    const window = performance.eventLoopUtilization(elu, lastElu);
+    lastElu = elu;
+    const cpu = process.cpuUsage(lastCpu.usage);
+    const wall = performance.now() - lastCpu.at;
+    lastCpu = { usage: process.cpuUsage(), at: performance.now() };
+    return json(res, 200, {
+      matches: rooms.stats(),
+      memory: process.memoryUsage().rss,
+      eventLoop: {
+        utilization: Number(window.utilization.toFixed(3)),
+        sinceMs: Math.round(window.idle + window.active),
+      },
+      cpu: Number(((cpu.user + cpu.system) / 1000 / wall).toFixed(3)),
+    });
   }
 
   if (url.pathname === "/api/replays" && req.method === "GET") {
