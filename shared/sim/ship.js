@@ -2,6 +2,7 @@ import { ARENA, wrap } from "./arena.js";
 import { homing } from "./behaviors.js";
 import { BULLET, Bullet } from "./bullet.js";
 import { Entity } from "./entity.js";
+import { cos, hypot, sin } from "./fmath.js";
 import { gravityAt, wellFields } from "./gravity.js";
 import { EFFECT_DURATION } from "./pickup.js";
 import { Vector2 } from "./vector.js";
@@ -25,15 +26,15 @@ export function integrate(ship, input, dt) {
   angle += turn * SHIP.turnSpeed * dt;
 
   if (input.thrust) {
-    vx += Math.cos(angle) * SHIP.thrust * dt;
-    vy += Math.sin(angle) * SHIP.thrust * dt;
+    vx += cos(angle) * SHIP.thrust * dt;
+    vy += sin(angle) * SHIP.thrust * dt;
   }
 
   const damping = Math.max(0, 1 - SHIP.drag * dt);
   vx *= damping;
   vy *= damping;
 
-  const speed = Math.hypot(vx, vy);
+  const speed = hypot(vx, vy);
   if (speed > SHIP.maxSpeed) {
     vx = (vx / speed) * SHIP.maxSpeed;
     vy = (vy / speed) * SHIP.maxSpeed;

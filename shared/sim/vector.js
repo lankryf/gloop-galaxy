@@ -1,3 +1,4 @@
+import { atan2, cos, hypot, sin } from "./fmath.js";
 export class Vector2 {
   constructor(x = 0, y = 0) {
     this.x = x;
@@ -5,7 +6,7 @@ export class Vector2 {
   }
 
   static fromAngle(angle, length = 1) {
-    return new Vector2(Math.cos(angle) * length, Math.sin(angle) * length);
+    return new Vector2(cos(angle) * length, sin(angle) * length);
   }
 
   add(v) {
@@ -25,7 +26,7 @@ export class Vector2 {
   }
 
   length() {
-    return Math.hypot(this.x, this.y);
+    return hypot(this.x, this.y);
   }
 
   normalize() {
@@ -34,13 +35,13 @@ export class Vector2 {
   }
 
   rotate(angle) {
-    const c = Math.cos(angle);
-    const s = Math.sin(angle);
+    const c = cos(angle);
+    const s = sin(angle);
     return new Vector2(this.x * c - this.y * s, this.x * s + this.y * c);
   }
 
   angle() {
-    return Math.atan2(this.y, this.x);
+    return atan2(this.y, this.x);
   }
 
   clone() {

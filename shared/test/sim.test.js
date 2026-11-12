@@ -75,3 +75,7 @@ test("ships wrap around the arena", () => {
   world.step(1 / 30);
   assert.ok(ship.pos.x < 50);
 });
+
+test("scenario hash matches the value computed in Chrome", () => {
+  assert.equal(hashWorld(runScenario({ steps: 1000 })), "192f27b8");
+});

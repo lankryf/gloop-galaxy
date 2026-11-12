@@ -1,4 +1,5 @@
 import { findCollisions } from "./collision.js";
+import { hypot } from "./fmath.js";
 import { applyGravity } from "./gravity.js";
 import { createRng } from "./random.js";
 import { resolveCollisions } from "./rules.js";
@@ -102,7 +103,7 @@ export class World extends EventTarget {
       for (const e of this.#entities.values()) {
         if (!e.collidable || !e.alive) continue;
         const reach = e.range ? e.range * 0.6 : e.radius;
-        const d = Math.hypot(e.pos.x - x, e.pos.y - y) - reach;
+        const d = hypot(e.pos.x - x, e.pos.y - y) - reach;
         if (d < nearest) nearest = d;
       }
       if (nearest > bestDistance) {
