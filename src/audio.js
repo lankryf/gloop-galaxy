@@ -37,6 +37,10 @@ export function createAudio() {
         play("explosion", { volume: Math.min(1, 0.4 + e.detail.size * 0.3) }),
       );
       bus.addEventListener("pickup", () => play("pickup", { volume: 0.7 }));
+      bus.addEventListener("swallowed", (e) => {
+        if (e.detail.kind !== "bullet") play("explosion", { volume: 0.9, rate: 0.45 });
+      });
+      bus.addEventListener("collapsed", () => play("explosion", { volume: 1, rate: 0.3 }));
     },
   };
 }

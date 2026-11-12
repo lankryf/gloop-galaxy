@@ -68,12 +68,23 @@ export class Ship extends Entity {
     if (this.dead || this.effects.has("shield")) return false;
     this.#hp = Math.max(0, this.#hp - amount);
     if (this.#hp > 0) return false;
+    this.#die();
+    return true;
+  }
+
+  kill() {
+    if (this.dead) return false;
+    this.#hp = 0;
+    this.#die();
+    return true;
+  }
+
+  #die() {
     this.dead = true;
     this.collidable = false;
     this.effects.clear();
     this.deaths += 1;
     this.respawnIn = SHIP.respawnDelay;
-    return true;
   }
 
   respawn(world) {

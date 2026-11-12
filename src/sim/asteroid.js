@@ -15,9 +15,12 @@ export class Asteroid extends Entity {
     this.angle += this.spin * dt;
   }
 
-  static random(rng, arena) {
+  static random(rng, arena, world = null) {
     const radius = rng.range(20, 55);
-    const pos = new Vector2(rng.range(0, arena.width), rng.range(0, arena.height));
+    const spot = world?.findSafeSpot(radius, arena, 12);
+    const pos = spot
+      ? new Vector2(spot.x, spot.y)
+      : new Vector2(rng.range(0, arena.width), rng.range(0, arena.height));
     const vel = Vector2.fromAngle(rng.range(0, Math.PI * 2), rng.range(25, 90));
     const asteroid = new Asteroid({ pos, vel, radius, rng });
     if (rng.next() < 0.2) {

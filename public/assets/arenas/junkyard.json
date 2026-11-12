@@ -1,8 +1,26 @@
 {
   "name": "Космічне звалище",
   "background": ["#1f3b2a", "#0b1410"],
-  "planet": { "x": 0.18, "y": 0.75, "r": 95, "color": "#ffd23f" },
+  "planet": {
+    "x": 0.18,
+    "y": 0.75,
+    "r": 95,
+    "color": "#ffd23f"
+  },
   "asteroids": 11,
   "pickups": 3,
-  "seed": 1337
+  "seed": 1337,
+  "wells": [
+    {
+      "type": "planet",
+      "x": 0.3,
+      "y": 0.38
+    },
+    {
+      "type": "blackhole",
+      "x": 0.78,
+      "y": 0.7,
+      "drift": [-10, -12]
+    }
+  ]
 }

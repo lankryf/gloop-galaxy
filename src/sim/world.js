@@ -1,4 +1,5 @@
 import { findCollisions } from "./collision.js";
+import { applyGravity } from "./gravity.js";
 import { createRng } from "./random.js";
 import { resolveCollisions } from "./rules.js";
 
@@ -7,11 +8,12 @@ export class World extends EventTarget {
   #pending = [];
   #stepping = false;
 
-  constructor({ seed = 1, detect = findCollisions } = {}) {
+  constructor({ seed = 1, detect = findCollisions, systems = [applyGravity] } = {}) {
     super();
     this.rng = createRng(seed);
     this.time = 0;
     this.detect = detect;
+    this.systems = systems;
     this.timers = [];
   }
 
@@ -60,6 +62,7 @@ export class World extends EventTarget {
       entity.update(dt, this);
       for (const behavior of entity.behaviors) behavior(entity, this, dt);
     }
+    for (const system of this.systems) system(this, dt);
     resolveCollisions(this, this.detect(this.#entities.values()));
     this.#sweep();
     this.#stepping = false;
@@ -86,7 +89,8 @@ export class World extends EventTarget {
       let nearest = Number.POSITIVE_INFINITY;
       for (const e of this.#entities.values()) {
         if (!e.collidable || !e.alive) continue;
-        const d = Math.hypot(e.pos.x - x, e.pos.y - y) - e.radius;
+        const reach = e.range ? e.range * 0.6 : e.radius;
+        const d = Math.hypot(e.pos.x - x, e.pos.y - y) - reach;
         if (d < nearest) nearest = d;
       }
       if (nearest > bestDistance) {

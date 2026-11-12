@@ -11,6 +11,11 @@ export function createHud(bus) {
     popups.push({ text: names[e.detail.type], x: e.detail.x, y: e.detail.y, ttl: 1.4, big: true });
   });
 
+  bus.addEventListener("swallowed", (e) => {
+    if (e.detail.kind === "ship")
+      popups.push({ text: "НЯМ!", x: e.detail.x, y: e.detail.y, ttl: 1.4, big: true });
+  });
+
   return {
     note(text, seconds = 5) {
       messages.push({ text, ttl: seconds });

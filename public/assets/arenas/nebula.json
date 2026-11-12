@@ -1,8 +1,21 @@
 {
   "name": "Туманність Слимака",
   "background": ["#3d1b63", "#140a24"],
-  "planet": { "x": 0.82, "y": 0.2, "r": 70, "color": "#ff7ad9" },
+  "planet": {
+    "x": 0.82,
+    "y": 0.2,
+    "r": 70,
+    "color": "#ff7ad9"
+  },
   "asteroids": 6,
   "pickups": 2,
-  "seed": 42
+  "seed": 42,
+  "wells": [
+    {
+      "type": "blackhole",
+      "x": 0.66,
+      "y": 0.62,
+      "drift": [-14, 9]
+    }
+  ]
 }

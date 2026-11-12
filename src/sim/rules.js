@@ -29,6 +29,13 @@ function pushApart(a, b) {
   return { normal, overlap };
 }
 
+function bounceOff(well, body) {
+  const { normal, overlap } = pushApart(well, body);
+  body.pos = body.pos.add(normal.scale(overlap + 1));
+  const vn = body.vel.dot(normal);
+  if (vn < 0) body.vel = body.vel.sub(normal.scale(vn * 1.8));
+}
+
 const handlers = {
   "asteroid|bullet"(world, asteroid, bullet) {
     bullet.alive = false;
@@ -43,7 +50,7 @@ const handlers = {
     asteroid.alive = false;
     credit(world, bullet.ownerId, SCORE.asteroid, asteroid.pos);
     explode(world, asteroid.pos, asteroid.radius / 35, "#b49ad1");
-    world.spawn(Asteroid.random(world.rng, ARENA));
+    world.spawn(Asteroid.random(world.rng, ARENA, world));
   },
 
   "bullet|ship"(world, bullet, ship) {
@@ -88,6 +95,41 @@ const handlers = {
     if (va - vb <= 0) return;
     a.vel = a.vel.add(normal.scale(vb - va));
     b.vel = b.vel.add(normal.scale(va - vb));
+  },
+
+  "bullet|well"(world, bullet, well) {
+    bullet.alive = false;
+    if (!well.solid) world.emit("swallowed", { x: well.pos.x, y: well.pos.y, kind: "bullet" });
+  },
+
+  "asteroid|well"(world, asteroid, well) {
+    if (well.solid) {
+      bounceOff(well, asteroid);
+      return;
+    }
+    asteroid.alive = false;
+    world.emit("swallowed", { x: well.pos.x, y: well.pos.y, kind: "asteroid" });
+    world.later(2, (w) => w.spawn(Asteroid.random(w.rng, ARENA, w)));
+  },
+
+  "ship|well"(world, ship, well) {
+    if (ship.dead) return;
+    if (well.solid) {
+      bounceOff(well, ship);
+      world.emit("hit", { x: ship.pos.x, y: ship.pos.y, target: "ship", shipId: ship.id });
+      if (ship.damage(15)) explode(world, ship.pos, 1.4);
+      return;
+    }
+    if (ship.effects.has("shield")) {
+      const { normal } = pushApart(well, ship);
+      ship.pos = well.pos.add(normal.scale(well.radius * 2.5));
+      ship.vel = normal.scale(480);
+      ship.effects.delete("shield");
+      world.emit("hit", { x: ship.pos.x, y: ship.pos.y, target: "ship", shipId: ship.id });
+      return;
+    }
+    ship.kill();
+    world.emit("swallowed", { x: well.pos.x, y: well.pos.y, kind: "ship", shipId: ship.id });
   },
 };
 

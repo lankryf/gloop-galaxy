@@ -10,6 +10,7 @@ import {
   drawPickup,
   drawShield,
   drawShip,
+  drawWell,
   interpolate,
   interpolateShip,
 } from "./render/draw.js";
@@ -18,6 +19,7 @@ import { Asteroid } from "./sim/asteroid.js";
 import { Pickup } from "./sim/pickup.js";
 import { Ship } from "./sim/ship.js";
 import { Vector2 } from "./sim/vector.js";
+import { GravityWell } from "./sim/well.js";
 import { World } from "./sim/world.js";
 
 export function startGame({ ctx, view, input, audio, sprites, arena, pilot, experiment = {} }) {
@@ -29,7 +31,8 @@ export function startGame({ ctx, view, input, audio, sprites, arena, pilot, expe
   );
   const dummy = world.spawn(new Ship({ pos: new Vector2(300, 200), angle: 0, name: "dummy" }));
   dummy.controls = { thrust: true, left: true, right: false, fire: false };
-  for (let i = 0; i < arena.asteroids; i++) world.spawn(Asteroid.random(world.rng, ARENA));
+  for (const config of arena.wells ?? []) world.spawn(GravityWell.fromConfig(config));
+  for (let i = 0; i < arena.asteroids; i++) world.spawn(Asteroid.random(world.rng, ARENA, world));
   for (let i = 0; i < arena.pickups; i++) world.spawn(Pickup.random(world, ARENA));
 
   audio?.listen(world, { ownId: () => ship.id });
@@ -70,6 +73,7 @@ export function startGame({ ctx, view, input, audio, sprites, arena, pilot, expe
 
     beginFrame(ctx, view);
     drawBackground(ctx, ARENA, arena);
+    for (const w of world.ofKind("well")) drawWell(ctx, w, interpolate(w, alpha, ARENA), now);
     for (const p of world.ofKind("pickup")) drawPickup(ctx, p, sprites);
     for (const a of world.ofKind("asteroid")) {
       drawAsteroid(ctx, a, interpolate(a, alpha, ARENA), sprites);

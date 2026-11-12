@@ -51,6 +51,7 @@ export function drawBackground(ctx, arena, theme = DEFAULT_THEME) {
   const { x, y, r, color } = theme.planet;
   const px = arena.width * x;
   const py = arena.height * y;
+  ctx.globalAlpha = 0.45;
   ctx.fillStyle = color;
   ctx.strokeStyle = INK;
   ctx.lineWidth = 6;
@@ -63,6 +64,7 @@ export function drawBackground(ctx, arena, theme = DEFAULT_THEME) {
   ctx.arc(px - r * 0.3, py + r * 0.2, r * 0.26, 0, Math.PI * 2);
   ctx.arc(px + r * 0.35, py - r * 0.3, r * 0.14, 0, Math.PI * 2);
   ctx.fill();
+  ctx.globalAlpha = 1;
 
   ctx.strokeStyle = "rgba(141, 255, 58, 0.25)";
   ctx.lineWidth = 3;
@@ -289,4 +291,103 @@ export function drawShield(ctx, p) {
   ctx.beginPath();
   ctx.arc(p.x, p.y, 40, 0, Math.PI * 2);
   ctx.stroke();
+}
+
+function drawRange(ctx, x, y, range, color) {
+  ctx.save();
+  ctx.setLineDash([6, 14]);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(x, y, range, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBlackHole(ctx, w, p, time) {
+  const warning = w.timeLeft < 3 && Math.floor(time / 120) % 2 === 0;
+  drawRange(ctx, p.x, p.y, w.range, "rgba(141, 255, 58, 0.12)");
+  drawRange(ctx, p.x, p.y, w.range * 0.45, "rgba(255, 122, 217, 0.18)");
+
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.angle);
+  for (let i = 0; i < 3; i++) {
+    ctx.rotate((Math.PI * 2) / 3);
+    ctx.strokeStyle = i % 2 ? "rgba(255, 122, 217, 0.75)" : "rgba(141, 255, 58, 0.75)";
+    ctx.lineWidth = 7 - i;
+    ctx.beginPath();
+    ctx.arc(0, 0, w.radius * 2.1, 0, Math.PI * 0.9);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, w.radius * 1.55, Math.PI, Math.PI * 1.7);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  const glow = ctx.createRadialGradient(p.x, p.y, w.radius * 0.6, p.x, p.y, w.radius * 1.6);
+  glow.addColorStop(0, "#000000");
+  glow.addColorStop(0.6, "#05010a");
+  glow.addColorStop(1, warning ? "rgba(255, 92, 92, 0)" : "rgba(141, 255, 58, 0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, w.radius * 1.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = warning ? "#ff5c5c" : GOO;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, w.radius, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function drawPlanet(ctx, w, p) {
+  drawRange(ctx, p.x, p.y, w.range, "rgba(79, 216, 255, 0.14)");
+  const r = w.radius;
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = INK;
+
+  ctx.fillStyle = "#4fd8ff";
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.rotate(p.angle);
+  ctx.fillStyle = "#2fa8d8";
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.3, -r * 0.35, r * 0.32, r * 0.18, 0.4, 0, Math.PI * 2);
+  ctx.ellipse(r * 0.35, r * 0.3, r * 0.22, r * 0.14, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.rotate(-p.angle);
+
+  ctx.fillStyle = "#fff";
+  for (const ex of [-0.25, 0.25]) {
+    ctx.beginPath();
+    ctx.arc(ex * r, -0.05 * r, r * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.arc(-0.22 * r, -0.03 * r, r * 0.07, 0, Math.PI * 2);
+  ctx.arc(0.28 * r, -0.03 * r, r * 0.07, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(0, r * 0.25, r * 0.22, 0.15 * Math.PI, 0.85 * Math.PI);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#ffd23f";
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r * 1.6, r * 0.38, -0.35, 0.05 * Math.PI, 0.95 * Math.PI);
+  ctx.stroke();
+  ctx.restore();
+}
+
+export function drawWell(ctx, w, p, time) {
+  if (w.type === "blackhole") drawBlackHole(ctx, w, p, time);
+  else drawPlanet(ctx, w, p);
 }
