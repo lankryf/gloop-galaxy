@@ -6,12 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc -p ."
   },
   "devDependencies": {
     "vite": "^7.3.8"
   },
   "dependencies": {
-    "@gloop/shared": "*"
+    "@gloop/shared": "*",
+    "zod": "^4.6.7"
   }
 }

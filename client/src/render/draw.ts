@@ -1,10 +1,77 @@
-import { wrap } from "@gloop/shared/sim/arena.js";
+import type { ArenaSize } from "@gloop/shared/sim/arena.ts";
+import { wrap } from "@gloop/shared/sim/arena.ts";
+import type { PickupType } from "@gloop/shared/sim/pickup.ts";
+import type { Point } from "@gloop/shared/sim/vector.ts";
+import type { WellType } from "@gloop/shared/sim/well.ts";
+import type { Frame, Theme } from "../assets/manifest.ts";
+import type { LoopStats } from "../loop.ts";
+import type { View } from "./canvas.ts";
+
+type Ctx = CanvasRenderingContext2D;
+
+export interface SpriteSheet {
+  readonly image: ImageBitmap;
+  readonly frames: Readonly<Record<string, Frame>>;
+}
+export type Sprites = Readonly<Record<string, SpriteSheet>>;
+
+export interface Pose {
+  readonly x: number;
+  readonly y: number;
+  readonly angle: number;
+}
+
+export interface ShipPose extends Pose {
+  readonly thrust: boolean;
+}
+
+export interface Moving {
+  readonly pos: Point;
+  readonly prevPos: Point;
+  readonly angle: number;
+  readonly prevAngle: number;
+}
+
+export interface AsteroidLook {
+  readonly id: number;
+  readonly radius: number;
+  readonly hunter: boolean;
+  readonly shape?: readonly number[];
+}
+
+export interface PickupLook {
+  readonly pos: Point;
+  readonly type: PickupType;
+  readonly age: number;
+  readonly radius: number;
+}
+
+export interface WellLook {
+  readonly type: WellType;
+  readonly range: number;
+  readonly radius: number;
+  readonly timeLeft: number;
+}
+
+export interface ExplosionLook {
+  readonly ttl: number;
+  readonly duration: number;
+  readonly color: string;
+  readonly particles: readonly { readonly pos: Point; readonly r: number }[];
+}
+
+interface Star {
+  readonly x: number;
+  readonly y: number;
+  readonly r: number;
+  readonly a: number;
+}
 
 const GOO = "#8dff3a";
 const INK = "#1a0b26";
 
-function makeStars(width, height, count) {
-  const stars = [];
+function makeStars(width: number, height: number, count: number): Star[] {
+  const stars: Star[] = [];
   let seed = 7;
   const rand = () => {
     seed = (seed * 16807) % 2147483647;
@@ -16,14 +83,18 @@ function makeStars(width, height, count) {
   return stars;
 }
 
-let stars = null;
+let stars: Star[] | null = null;
 
-const DEFAULT_THEME = {
+const DEFAULT_THEME: Pick<Theme, "background" | "planet"> = {
   background: ["#3d1b63", "#140a24"],
   planet: { x: 0.82, y: 0.2, r: 70, color: "#ff7ad9" },
 };
 
-export function drawBackground(ctx, arena, theme = DEFAULT_THEME) {
+export function drawBackground(
+  ctx: Ctx,
+  arena: ArenaSize,
+  theme: Pick<Theme, "background" | "planet"> = DEFAULT_THEME,
+): void {
   const [inner, outer] = theme.background;
   const g = ctx.createRadialGradient(
     arena.width * 0.3,
@@ -71,8 +142,18 @@ export function drawBackground(ctx, arena, theme = DEFAULT_THEME) {
   ctx.strokeRect(0, 0, arena.width, arena.height);
 }
 
-export function drawSprite(ctx, sheet, frameName, x, y, angle = 0, scale = 1) {
-  const [sx, sy, sw, sh] = sheet.frames[frameName];
+export function drawSprite(
+  ctx: Ctx,
+  sheet: SpriteSheet,
+  frameName: string,
+  x: number,
+  y: number,
+  angle = 0,
+  scale = 1,
+): void {
+  const frame = sheet.frames[frameName];
+  if (!frame) return;
+  const [sx, sy, sw, sh] = frame;
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
@@ -81,25 +162,25 @@ export function drawSprite(ctx, sheet, frameName, x, y, angle = 0, scale = 1) {
   ctx.restore();
 }
 
-function lerp(a, b, t) {
+function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-export function lerpWrapped(a, b, t, size) {
+export function lerpWrapped(a: number, b: number, t: number, size: number): number {
   let d = b - a;
   if (d > size / 2) d -= size;
   if (d < -size / 2) d += size;
   return wrap(lerp(a, a + d, t), size);
 }
 
-export function lerpAngle(a, b, t) {
+export function lerpAngle(a: number, b: number, t: number): number {
   let d = (b - a) % (Math.PI * 2);
   if (d > Math.PI) d -= Math.PI * 2;
   if (d < -Math.PI) d += Math.PI * 2;
   return a + d * t;
 }
 
-export function interpolate(entity, alpha, arena) {
+export function interpolate(entity: Moving, alpha: number, arena: ArenaSize): Pose {
   return {
     x: lerpWrapped(entity.prevPos.x, entity.pos.x, alpha, arena.width),
     y: lerpWrapped(entity.prevPos.y, entity.pos.y, alpha, arena.height),
@@ -107,11 +188,15 @@ export function interpolate(entity, alpha, arena) {
   };
 }
 
-export function interpolateShip(ship, alpha, arena) {
+export function interpolateShip(
+  ship: Moving & { readonly thrust: boolean },
+  alpha: number,
+  arena: ArenaSize,
+): ShipPose {
   return { ...interpolate(ship, alpha, arena), thrust: ship.thrust };
 }
 
-function drawFlame(ctx, time) {
+function drawFlame(ctx: Ctx, time: number): void {
   const flicker = 10 + Math.sin(time * 0.05) * 6;
   ctx.fillStyle = "#ffd23f";
   ctx.strokeStyle = "#ff7a00";
@@ -125,7 +210,7 @@ function drawFlame(ctx, time) {
   ctx.stroke();
 }
 
-export function drawName(ctx, name, x, y, own) {
+export function drawName(ctx: Ctx, name: string, x: number, y: number, own: boolean): void {
   ctx.font = "bold 15px sans-serif";
   ctx.textAlign = "center";
   ctx.lineWidth = 4;
@@ -136,7 +221,13 @@ export function drawName(ctx, name, x, y, own) {
   ctx.textAlign = "start";
 }
 
-export function drawShip(ctx, ship, time, own = true, sprites = null) {
+export function drawShip(
+  ctx: Ctx,
+  ship: ShipPose,
+  time: number,
+  own = true,
+  sprites: Sprites | null = null,
+): void {
   if (sprites?.ships) {
     ctx.save();
     ctx.translate(ship.x, ship.y);
@@ -193,7 +284,12 @@ export function drawShip(ctx, ship, time, own = true, sprites = null) {
   ctx.restore();
 }
 
-export function drawHud(ctx, view, stats, extra = []) {
+export function drawHud(
+  ctx: Ctx,
+  view: View,
+  stats: LoopStats,
+  extra: readonly string[] = [],
+): void {
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   const lines = [
     `steps/s  ${stats.stepsPerSecond}`,
@@ -210,7 +306,7 @@ export function drawHud(ctx, view, stats, extra = []) {
   });
 }
 
-export function drawBullet(ctx, b, sprites = null) {
+export function drawBullet(ctx: Ctx, b: Pose, sprites: Sprites | null = null): void {
   if (sprites?.items) {
     drawSprite(ctx, sprites.items, "bullet", b.x, b.y, b.angle, 0.8);
     return;
@@ -224,9 +320,9 @@ export function drawBullet(ctx, b, sprites = null) {
   ctx.stroke();
 }
 
-const shapes = new Map();
+const shapes = new Map<number, number[]>();
 
-function shapeFor(id) {
+function shapeFor(id: number): readonly number[] {
   let shape = shapes.get(id);
   if (!shape) {
     let seed = id * 2654435761;
@@ -239,7 +335,12 @@ function shapeFor(id) {
   return shape;
 }
 
-export function drawAsteroid(ctx, a, p, sprites = null) {
+export function drawAsteroid(
+  ctx: Ctx,
+  a: AsteroidLook,
+  p: Pose,
+  sprites: Sprites | null = null,
+): void {
   if (sprites?.asteroids) {
     const frame = `${a.hunter ? "hunter" : "rock"}${a.id % 4}`;
     drawSprite(ctx, sprites.asteroids, frame, p.x, p.y, a.hunter ? 0 : p.angle, a.radius / 52);
@@ -254,12 +355,12 @@ export function drawAsteroid(ctx, a, p, sprites = null) {
   ctx.beginPath();
   const shape = a.shape ?? shapeFor(a.id);
   const n = shape.length;
-  for (let i = 0; i < n; i++) {
+  shape.forEach((k, i) => {
     const ang = (i / n) * Math.PI * 2;
-    const r = a.radius * shape[i];
+    const r = a.radius * k;
     if (i === 0) ctx.moveTo(Math.cos(ang) * r, Math.sin(ang) * r);
     else ctx.lineTo(Math.cos(ang) * r, Math.sin(ang) * r);
-  }
+  });
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
@@ -271,7 +372,7 @@ export function drawAsteroid(ctx, a, p, sprites = null) {
   ctx.restore();
 }
 
-export function drawExplosion(ctx, e) {
+export function drawExplosion(ctx: Ctx, e: ExplosionLook): void {
   const t = e.ttl / e.duration;
   ctx.globalAlpha = Math.max(0, t);
   ctx.fillStyle = e.color;
@@ -286,10 +387,18 @@ export function drawExplosion(ctx, e) {
   ctx.globalAlpha = 1;
 }
 
-const PICKUP_COLORS = { shield: "#4fd8ff", rapid: "#ffd23f", homing: "#ff7ad9" };
-const PICKUP_LETTERS = { shield: "S", rapid: "R", homing: "H" };
+const PICKUP_COLORS: Readonly<Record<PickupType, string>> = {
+  shield: "#4fd8ff",
+  rapid: "#ffd23f",
+  homing: "#ff7ad9",
+};
+const PICKUP_LETTERS: Readonly<Record<PickupType, string>> = {
+  shield: "S",
+  rapid: "R",
+  homing: "H",
+};
 
-export function drawPickup(ctx, p, sprites = null) {
+export function drawPickup(ctx: Ctx, p: PickupLook, sprites: Sprites | null = null): void {
   const bob = Math.sin(p.age * 3) * 4;
   if (sprites?.items) {
     drawSprite(ctx, sprites.items, p.type, p.pos.x, p.pos.y + bob, 0, p.radius / 20);
@@ -312,7 +421,7 @@ export function drawPickup(ctx, p, sprites = null) {
   ctx.restore();
 }
 
-export function drawShield(ctx, p) {
+export function drawShield(ctx: Ctx, p: Point): void {
   ctx.strokeStyle = "rgba(79, 216, 255, 0.8)";
   ctx.lineWidth = 4;
   ctx.beginPath();
@@ -320,7 +429,7 @@ export function drawShield(ctx, p) {
   ctx.stroke();
 }
 
-function drawRange(ctx, x, y, range, color) {
+function drawRange(ctx: Ctx, x: number, y: number, range: number, color: string): void {
   ctx.save();
   ctx.setLineDash([6, 14]);
   ctx.strokeStyle = color;
@@ -331,7 +440,7 @@ function drawRange(ctx, x, y, range, color) {
   ctx.restore();
 }
 
-function drawBlackHole(ctx, w, p, time) {
+function drawBlackHole(ctx: Ctx, w: WellLook, p: Pose, time: number): void {
   const warning = w.timeLeft < 3 && Math.floor(time / 120) % 2 === 0;
   drawRange(ctx, p.x, p.y, w.range, "rgba(141, 255, 58, 0.12)");
   drawRange(ctx, p.x, p.y, w.range * 0.45, "rgba(255, 122, 217, 0.18)");
@@ -367,7 +476,7 @@ function drawBlackHole(ctx, w, p, time) {
   ctx.stroke();
 }
 
-function drawPlanet(ctx, w, p) {
+function drawPlanet(ctx: Ctx, w: WellLook, p: Pose): void {
   drawRange(ctx, p.x, p.y, w.range, "rgba(79, 216, 255, 0.14)");
   const r = w.radius;
   ctx.save();
@@ -414,7 +523,7 @@ function drawPlanet(ctx, w, p) {
   ctx.restore();
 }
 
-export function drawWell(ctx, w, p, time) {
+export function drawWell(ctx: Ctx, w: WellLook, p: Pose, time: number): void {
   if (w.type === "blackhole") drawBlackHole(ctx, w, p, time);
   else drawPlanet(ctx, w, p);
 }

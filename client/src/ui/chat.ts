@@ -1,4 +1,22 @@
-export function mountChat(root, connection, { you }) {
+import type { ServerMessageOf } from "@gloop/shared/protocol.ts";
+import type { Connection, ConnectionStatus } from "../net/connection.ts";
+import { must } from "./dom.ts";
+
+const STATUS_LABELS: Readonly<Record<ConnectionStatus, string>> = {
+  idle: "",
+  open: "",
+  connecting: "з'єднання…",
+  reconnecting: "зв'язок втрачено, перепідключення…",
+  closed: "відключено",
+};
+
+type Players = ServerMessageOf<"roster">["players"];
+
+export function mountChat(
+  root: HTMLElement,
+  connection: Connection,
+  { you }: { you: () => string },
+): () => void {
   const box = document.createElement("div");
   box.className = "chat";
   box.innerHTML = `
@@ -9,31 +27,30 @@ export function mountChat(root, connection, { you }) {
   roster.className = "roster";
   root.append(box, roster);
 
-  const log = box.querySelector(".chat-log");
-  const input = box.querySelector(".chat-input");
-  const status = box.querySelector(".chat-status");
+  const log = must(box, ".chat-log", HTMLUListElement);
+  const input = must(box, ".chat-input", HTMLInputElement);
+  const status = must(box, ".chat-status", HTMLDivElement);
   const controller = new AbortController();
   const { signal } = controller;
 
-  function add(text, kind = "") {
+  function add(text: string, kind = ""): void {
     const li = document.createElement("li");
     li.className = kind;
     li.textContent = text;
     log.append(li);
-    while (log.children.length > 8) log.firstElementChild.remove();
+    while (log.children.length > 8) log.firstElementChild?.remove();
   }
 
-  connection.addEventListener(
+  connection.events.on(
     "chat",
-    (e) => {
-      const { name, text, from } = e.detail;
-      add(`${name}: ${text}`, from === you() ? "own" : "");
+    ({ name, text, from }) => add(`${name}: ${text}`, from === you() ? "own" : ""),
+    {
+      signal,
     },
-    { signal },
   );
 
-  let previous = new Map();
-  function showRoster(players) {
+  let previous = new Map<string, string>();
+  function showRoster(players: Players): void {
     const current = new Map(players.map((p) => [p.id, p.name]));
     for (const [id, name] of current)
       if (previous.size > 0 && !previous.has(id)) add(`${name} залетів`, "system");
@@ -48,20 +65,13 @@ export function mountChat(root, connection, { you }) {
     );
   }
 
-  connection.addEventListener("roster", (e) => showRoster(e.detail.players), { signal });
-  const known = connection.last.get("roster");
-  if (known) showRoster(known.players);
+  connection.events.on("roster", ({ players }) => showRoster(players), { signal });
+  if (connection.lastRoster) showRoster(connection.lastRoster.players);
 
-  connection.addEventListener(
+  connection.events.on(
     "status",
     (e) => {
-      const labels = {
-        open: "",
-        connecting: "з'єднання…",
-        reconnecting: "зв'язок втрачено, перепідключення…",
-        closed: "відключено",
-      };
-      status.textContent = labels[e.detail.status] ?? "";
+      status.textContent = STATUS_LABELS[e.status];
     },
     { signal },
   );

@@ -1,12 +1,39 @@
-const PRESETS = [
+import type { CodecName } from "@gloop/shared/codec/codec.ts";
+import type { NetsimSettings } from "@gloop/shared/protocol.ts";
+import type { View } from "../render/canvas.ts";
+
+export interface NetStats {
+  rtt: number;
+  snapshotAge: number;
+  bytesInPerSec: number;
+  bytesOutPerSec: number;
+  snapshotBytes: number;
+  pending: number;
+  correction: number;
+  maxCorrection: number;
+  delayMs: number;
+  starved: number;
+  codec: CodecName;
+  prediction: boolean;
+  netsim: NetsimSettings;
+  history: readonly number[];
+}
+
+export interface Netgraph {
+  readonly stats: NetStats;
+  nextPreset(): NetsimSettings;
+  draw(ctx: CanvasRenderingContext2D, view: View): void;
+}
+
+const PRESETS: readonly [NetsimSettings, ...NetsimSettings[]] = [
   { lag: 0, jitter: 0, drop: 0 },
   { lag: 100, jitter: 0, drop: 0 },
   { lag: 100, jitter: 30, drop: 0.02 },
   { lag: 250, jitter: 50, drop: 0.05 },
 ];
 
-export function createNetgraph() {
-  const stats = {
+export function createNetgraph(): Netgraph {
+  const stats: NetStats = {
     rtt: 0,
     snapshotAge: 0,
     bytesInPerSec: 0,
@@ -28,7 +55,7 @@ export function createNetgraph() {
     stats,
     nextPreset() {
       presetIndex = (presetIndex + 1) % PRESETS.length;
-      return PRESETS[presetIndex];
+      return PRESETS[presetIndex] ?? PRESETS[0];
     },
     draw(ctx, view) {
       const w = 250;

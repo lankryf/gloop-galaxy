@@ -1,11 +1,12 @@
+import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 
-function testingMiddleware() {
+function testingMiddleware(): Plugin {
   return {
     name: "testing-middleware",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        const url = new URL(req.url, "http://localhost");
+        const url = new URL(req.url ?? "/", "http://localhost");
         const delay = Number(url.searchParams.get("delay") ?? 0);
         if (delay > 0) await new Promise((r) => setTimeout(r, delay));
 
@@ -24,8 +25,9 @@ function testingMiddleware() {
 
         if (url.searchParams.has("flaky")) {
           const key = url.search;
-          flaky.set(key, (flaky.get(key) ?? 0) + 1);
-          if (flaky.get(key) <= 2) {
+          const hits = (flaky.get(key) ?? 0) + 1;
+          flaky.set(key, hits);
+          if (hits <= 2) {
             res.statusCode = 503;
             res.end("try again");
             return;
@@ -37,7 +39,7 @@ function testingMiddleware() {
   };
 }
 
-const flaky = new Map();
+const flaky = new Map<string, number>();
 
 export default defineConfig({
   appType: "mpa",

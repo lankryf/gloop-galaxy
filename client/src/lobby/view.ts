@@ -1,6 +1,11 @@
+import type { RoomInfo } from "@gloop/shared/protocol.ts";
+import { messageOf } from "../assets/retry.ts";
+import { must } from "../ui/dom.ts";
+import type { Lobby } from "./lobby.ts";
+
 const NAME_KEY = "gloop.name";
 
-function savedName() {
+function savedName(): string {
   try {
     return localStorage.getItem(NAME_KEY) ?? "";
   } catch {
@@ -8,7 +13,7 @@ function savedName() {
   }
 }
 
-function saveName(name) {
+function saveName(name: string): void {
   try {
     localStorage.setItem(NAME_KEY, name);
   } catch {
@@ -16,7 +21,7 @@ function saveName(name) {
   }
 }
 
-export function mountLobby(lobby, root) {
+export function mountLobby(lobby: Lobby, root: HTMLElement): () => void {
   root.innerHTML = `
     <div class="panel lobby">
       <h1>Gloop Galaxy</h1>
@@ -35,24 +40,35 @@ export function mountLobby(lobby, root) {
       <p class="error" hidden></p>
     </div>`;
 
-  const input = root.querySelector("input");
-  const list = root.querySelector(".rooms");
-  const status = root.querySelector(".status");
-  const join = root.querySelector(".join");
-  const error = root.querySelector(".error");
-  let selected = null;
+  const pilot = must(root, 'input[name="pilot"]', HTMLInputElement);
+  const list = must(root, ".rooms", HTMLUListElement);
+  const status = must(root, ".status", HTMLSpanElement);
+  const join = must(root, ".join", HTMLButtonElement);
+  const error = must(root, ".error", HTMLParagraphElement);
+  const form = must(root, ".create-room", HTMLFormElement);
+  const roomName = must(form, 'input[name="room"]', HTMLInputElement);
+  const arena = must(form, 'select[name="arena"]', HTMLSelectElement);
+  let selected: string | null = null;
 
-  input.value = savedName() || `pilot${Math.floor(Math.random() * 900 + 100)}`;
+  pilot.value = savedName() || `pilot${Math.floor(Math.random() * 900 + 100)}`;
 
-  function render(rooms) {
+  function showError(text: string): void {
+    error.hidden = false;
+    error.textContent = text;
+  }
+
+  function render(rooms: readonly RoomInfo[]): void {
     list.replaceChildren(
       ...rooms.map((room) => {
         const li = document.createElement("li");
         const full = room.players >= room.maxPlayers;
         li.className = room.id === selected ? "selected" : "";
         li.classList.toggle("full", full);
-        li.innerHTML = `<span></span><span>${room.players}/${room.maxPlayers}</span>`;
-        li.firstElementChild.textContent = room.name;
+        const title = document.createElement("span");
+        title.textContent = room.name;
+        const count = document.createElement("span");
+        count.textContent = `${room.players}/${room.maxPlayers}`;
+        li.append(title, count);
         li.addEventListener("click", () => {
           if (full) return;
           selected = room.id;
@@ -66,42 +82,45 @@ export function mountLobby(lobby, root) {
 
   const controller = new AbortController();
   const { signal } = controller;
-  lobby.addEventListener("loading", () => (status.textContent = "оновлення…"), { signal });
-  lobby.addEventListener(
-    "rooms",
-    (e) => {
-      status.textContent = `оновлено ${new Date().toLocaleTimeString()}`;
-      error.hidden = true;
-      render(e.detail.rooms);
+  lobby.events.on(
+    "loading",
+    () => {
+      status.textContent = "оновлення…";
     },
     { signal },
   );
-  lobby.addEventListener(
+  lobby.events.on(
+    "rooms",
+    ({ rooms }) => {
+      status.textContent = `оновлено ${new Date().toLocaleTimeString()}`;
+      error.hidden = true;
+      render(rooms);
+    },
+    { signal },
+  );
+  lobby.events.on(
     "error",
-    (e) => {
+    ({ message }) => {
       status.textContent = "";
-      error.hidden = false;
-      error.textContent = `Не вдалося оновити список: ${e.detail.message}`;
+      showError(`Не вдалося оновити список: ${message}`);
     },
     { signal },
   );
 
-  const form = root.querySelector(".create-room");
   form.addEventListener(
     "submit",
     async (e) => {
       e.preventDefault();
-      const name = form.room.value.trim();
+      const name = roomName.value.trim();
       if (!name) return;
       try {
-        const room = await lobby.create(name, form.arena.value);
+        const room = await lobby.create(name, arena.value);
         selected = room.id;
         join.disabled = false;
-        form.room.value = "";
+        roomName.value = "";
         render(lobby.rooms);
-      } catch (err) {
-        error.hidden = false;
-        error.textContent = `Не вдалося створити кімнату: ${err.message}`;
+      } catch (err: unknown) {
+        showError(`Не вдалося створити кімнату: ${messageOf(err)}`);
       }
     },
     { signal },
@@ -110,13 +129,12 @@ export function mountLobby(lobby, root) {
   join.addEventListener(
     "click",
     () => {
-      const name = input.value.trim() || "pilot";
+      const name = pilot.value.trim() || "pilot";
       saveName(name);
       try {
         lobby.join(selected, name);
-      } catch (err) {
-        error.hidden = false;
-        error.textContent = err.message;
+      } catch (err: unknown) {
+        showError(messageOf(err));
       }
     },
     { signal },

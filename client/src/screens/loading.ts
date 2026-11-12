@@ -1,6 +1,15 @@
+import type { Progress } from "../assets/loader.ts";
+import type { View } from "../render/canvas.ts";
+
 const ICONS = { pending: "…", ok: "✓", failed: "✗" };
 
-export function drawLoading(ctx, view, progress, title = "Завантаження", detail = "") {
+export function drawLoading(
+  ctx: CanvasRenderingContext2D,
+  view: View,
+  progress: Progress,
+  title = "Завантаження",
+  detail = "",
+): void {
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   ctx.fillStyle = "#12091f";
   ctx.fillRect(0, 0, view.width, view.height);

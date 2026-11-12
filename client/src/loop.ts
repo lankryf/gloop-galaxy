@@ -1,5 +1,31 @@
 const MAX_FRAME = 0.25;
 
+export type Scheduler = "raf" | "interval";
+
+export interface LoopStats {
+  stepsPerSecond: number;
+  framesPerSecond: number;
+  frameTime: number;
+  jitter: number;
+  worstInterval: number;
+  totalSteps: number;
+}
+
+export interface Loop {
+  readonly stats: LoopStats;
+  start(): void;
+  stop(): void;
+}
+
+export interface LoopOptions {
+  readonly step?: number;
+  readonly simulate: (dt: number) => void;
+  readonly render: (alpha: number, stats: LoopStats) => void;
+  readonly scheduler?: Scheduler;
+  readonly fixedStep?: boolean;
+  readonly now?: () => number;
+}
+
 export function createLoop({
   step = 1 / 60,
   simulate,
@@ -7,7 +33,7 @@ export function createLoop({
   scheduler = "raf",
   fixedStep = true,
   now = () => performance.now(),
-}) {
+}: LoopOptions): Loop {
   let running = false;
   let handle = 0;
   let last = 0;
@@ -16,9 +42,9 @@ export function createLoop({
   let windowStart = 0;
   let stepsInWindow = 0;
   let framesInWindow = 0;
-  let intervals = [];
+  let intervals: number[] = [];
 
-  const stats = {
+  const stats: LoopStats = {
     stepsPerSecond: 0,
     framesPerSecond: 0,
     frameTime: 0,
@@ -27,7 +53,7 @@ export function createLoop({
     totalSteps: 0,
   };
 
-  function tick(t) {
+  function tick(t: number): void {
     const frameStart = now();
     const delta = Math.min((t - last) / 1000, MAX_FRAME);
     intervals.push(t - last);
@@ -65,7 +91,7 @@ export function createLoop({
     stats.frameTime = now() - frameStart;
   }
 
-  function onFrame(t) {
+  function onFrame(t: number): void {
     if (!running) return;
     tick(t);
     handle = requestAnimationFrame(onFrame);
@@ -80,7 +106,7 @@ export function createLoop({
       windowStart = last;
       accumulator = 0;
       if (scheduler === "interval") {
-        handle = setInterval(() => tick(now()), 16);
+        handle = window.setInterval(() => tick(now()), 16);
       } else {
         handle = requestAnimationFrame(onFrame);
       }
@@ -93,7 +119,7 @@ export function createLoop({
   };
 }
 
-function standardDeviation(values) {
+function standardDeviation(values: readonly number[]): number {
   if (values.length < 2) return 0;
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
   const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length;

@@ -1,13 +1,23 @@
-import { ARENA } from "@gloop/shared/sim/arena.js";
-import { Asteroid } from "@gloop/shared/sim/asteroid.js";
-import { Pickup } from "@gloop/shared/sim/pickup.js";
-import { Ship } from "@gloop/shared/sim/ship.js";
-import { Vector2 } from "@gloop/shared/sim/vector.js";
-import { GravityWell } from "@gloop/shared/sim/well.js";
-import { World } from "@gloop/shared/sim/world.js";
-import { createHud } from "./hud.js";
-import { createLoop } from "./loop.js";
-import { beginFrame } from "./render/canvas.js";
+import type { ArenaRules } from "@gloop/shared/arenas.ts";
+import { ARENA } from "@gloop/shared/sim/arena.ts";
+import { Asteroid } from "@gloop/shared/sim/asteroid.ts";
+import { Pickup } from "@gloop/shared/sim/pickup.ts";
+import type { Controls } from "@gloop/shared/sim/ship.ts";
+import { Ship } from "@gloop/shared/sim/ship.ts";
+import { Vector2 } from "@gloop/shared/sim/vector.ts";
+import { GravityWell } from "@gloop/shared/sim/well.ts";
+import { World } from "@gloop/shared/sim/world.ts";
+import type { Theme } from "./assets/manifest.ts";
+import type { Audio } from "./audio.ts";
+import type { GameExperiment } from "./experiments.ts";
+import type { Hud } from "./hud.ts";
+import { createHud } from "./hud.ts";
+import type { Input } from "./input.ts";
+import type { Loop, LoopStats } from "./loop.ts";
+import { createLoop } from "./loop.ts";
+import type { View } from "./render/canvas.ts";
+import { beginFrame } from "./render/canvas.ts";
+import type { Sprites } from "./render/draw.ts";
 import {
   drawAsteroid,
   drawBackground,
@@ -20,13 +30,40 @@ import {
   drawWell,
   interpolate,
   interpolateShip,
-} from "./render/draw.js";
+} from "./render/draw.ts";
 
-export function startGame({ ctx, view, input, audio, sprites, arena, pilot, experiment = {} }) {
-  const world = new World({ seed: arena.seed });
-  const hud = createHud(world);
+export interface OfflineOptions {
+  readonly ctx: CanvasRenderingContext2D;
+  readonly view: View;
+  readonly input: Input;
+  readonly audio: Audio | null;
+  readonly sprites: Sprites;
+  readonly theme: Theme;
+  readonly rules: ArenaRules;
+  readonly pilot: string;
+  readonly experiment: GameExperiment;
+}
 
-  for (const config of arena.wells ?? []) world.spawn(GravityWell.fromConfig(config));
+export function startGame({
+  ctx,
+  view,
+  input,
+  audio,
+  sprites,
+  theme,
+  rules,
+  pilot,
+  experiment,
+}: OfflineOptions): {
+  world: World;
+  hud: Hud;
+  loop: Loop;
+  ship: Ship;
+} {
+  const world = new World({ seed: rules.seed });
+  const hud = createHud(world.events);
+
+  for (const config of rules.wells) world.spawn(GravityWell.fromConfig(config));
   const start = experiment.probe
     ? { x: ARENA.width / 2, y: ARENA.height / 2 }
     : world.findSafeSpot(40, ARENA);
@@ -36,16 +73,16 @@ export function startGame({ ctx, view, input, audio, sprites, arena, pilot, expe
     new Ship({ pos: new Vector2(dummySpot.x, dummySpot.y), angle: 0, name: "dummy" }),
   );
   dummy.controls = { thrust: true, left: true, right: false, fire: false };
-  for (let i = 0; i < arena.asteroids; i++) world.spawn(Asteroid.random(world.rng, ARENA, world));
-  for (let i = 0; i < arena.pickups; i++) world.spawn(Pickup.random(world, ARENA));
+  for (let i = 0; i < rules.asteroids; i++) world.spawn(Asteroid.random(world.rng, ARENA, world));
+  for (let i = 0; i < rules.pickups; i++) world.spawn(Pickup.random(world, ARENA));
 
-  audio?.listen(world, { ownId: () => ship.id });
+  audio?.listen(world.events, { ownId: () => ship.id });
 
   let simTime = 0;
   let frameCount = 0;
   let reported = false;
 
-  function readControls() {
+  function readControls(): Controls {
     if (experiment.controls) return experiment.controls(simTime);
     return {
       thrust: input.isDown("ArrowUp") || input.isDown("KeyW"),
@@ -55,7 +92,7 @@ export function startGame({ ctx, view, input, audio, sprites, arena, pilot, expe
     };
   }
 
-  function simulate(dt) {
+  function simulate(dt: number): void {
     ship.controls = readControls();
     world.step(dt);
     hud.update(dt);
@@ -70,13 +107,13 @@ export function startGame({ ctx, view, input, audio, sprites, arena, pilot, expe
     }
   }
 
-  function render(alpha, stats) {
+  function render(alpha: number, stats: LoopStats): void {
     frameCount++;
-    experiment.beforeRender?.(frameCount);
+    experiment.beforeRender(frameCount);
     const now = performance.now();
 
     beginFrame(ctx, view);
-    drawBackground(ctx, ARENA, arena);
+    drawBackground(ctx, ARENA, theme);
     for (const w of world.ofKind("well")) drawWell(ctx, w, interpolate(w, alpha, ARENA), now);
     for (const p of world.ofKind("pickup")) drawPickup(ctx, p, sprites);
     for (const a of world.ofKind("asteroid")) {
@@ -107,8 +144,8 @@ export function startGame({ ctx, view, input, audio, sprites, arena, pilot, expe
   const loop = createLoop({
     simulate,
     render,
-    scheduler: experiment.scheduler ?? "raf",
-    fixedStep: experiment.fixedStep ?? true,
+    scheduler: experiment.scheduler,
+    fixedStep: experiment.fixedStep,
   });
   loop.start();
 
