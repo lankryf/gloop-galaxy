@@ -26,7 +26,7 @@ const ship = world.spawn(new Ship({ pos: new Vector2(ARENA.width / 2, ARENA.heig
 ship.attach(world);
 for (let i = 0; i < 6; i++) world.spawn(Asteroid.random(world.rng, ARENA));
 
-input.onPress("Space", ship.fire);
+input.onPress("Space", () => ship.fire());
 
 let simTime = 0;
 let reported = false;
