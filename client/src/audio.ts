@@ -1,6 +1,7 @@
 import type { Bus } from "@gloop/shared/bus.ts";
 import type { EntityId } from "@gloop/shared/ids.ts";
 import type { WorldEvents } from "@gloop/shared/sim/world.ts";
+import { sound } from "./ui/sound.ts";
 
 export const SOUND_NAMES = ["shoot", "hit", "explosion", "pickup", "ability", "lose"] as const;
 export type SoundName = (typeof SOUND_NAMES)[number];
@@ -21,7 +22,7 @@ export function createAudio(): Audio {
   const buffers = new Map<SoundName, AudioBuffer>();
 
   function play(name: SoundName, { volume = 1, rate = 1 } = {}): void {
-    if (context.state !== "running") return;
+    if (!sound.on || context.state !== "running") return;
     const buffer = buffers.get(name);
     if (!buffer) return;
     const source = context.createBufferSource();

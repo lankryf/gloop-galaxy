@@ -1,6 +1,7 @@
 import { aimOf } from "@gloop/shared/protocol.ts";
 import type { Controls } from "@gloop/shared/sim/ship.ts";
 import type { Input } from "../input.ts";
+import { sound } from "./sound.ts";
 
 const KEY = "gloop.mouse";
 
@@ -49,9 +50,22 @@ export function mountControlToggle(root: HTMLElement): () => void {
     box.blur();
   });
   label.append(box, " керування мишею");
-  root.append(label, hint);
+  const soundLabel = document.createElement("label");
+  soundLabel.className = "control-toggle";
+  const soundBox = document.createElement("input");
+  soundBox.type = "checkbox";
+  soundBox.checked = sound.on;
+  soundBox.addEventListener("change", () => {
+    sound.set(soundBox.checked);
+    soundBox.blur();
+  });
+  soundLabel.append(soundBox, " звук");
+  const toggles = document.createElement("div");
+  toggles.className = "game-toggles";
+  toggles.append(soundLabel, label);
+  root.append(toggles, hint);
   return () => {
-    label.remove();
+    toggles.remove();
     hint.remove();
   };
 }

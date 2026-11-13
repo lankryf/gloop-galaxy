@@ -276,11 +276,16 @@ body.debug .roster:not(:empty) {
   cursor: crosshair;
 }
 
-.control-toggle {
-  pointer-events: auto;
+.game-toggles {
   position: fixed;
   right: 246px;
   bottom: 12px;
+  display: flex;
+  gap: 6px;
+}
+
+.control-toggle {
+  pointer-events: auto;
   display: flex;
   align-items: center;
   gap: 6px;
