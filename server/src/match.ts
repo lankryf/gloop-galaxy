@@ -5,13 +5,7 @@ import { jsonCodec } from "@gloop/shared/codec/codec.ts";
 import type { EntityId, Seq, Tick } from "@gloop/shared/ids.ts";
 import { seq, tick } from "@gloop/shared/ids.ts";
 import type { EntitySnap, InputRecord, NetEvent, Snapshot } from "@gloop/shared/protocol.ts";
-import {
-  assertNever,
-  ShipFlag,
-  TICK_DT,
-  TICK_RATE,
-  unpackButtons,
-} from "@gloop/shared/protocol.ts";
+import { assertNever, controlsOf, ShipFlag, TICK_DT, TICK_RATE } from "@gloop/shared/protocol.ts";
 import { ARENA } from "@gloop/shared/sim/arena.ts";
 import type { AnyEntity } from "@gloop/shared/sim/kinds.ts";
 import { Ship } from "@gloop/shared/sim/ship.ts";
@@ -268,7 +262,7 @@ export class Match {
         const input = entry.queue.shift();
         if (!input) break;
         entry.lastSeq = input.seq;
-        entry.ship.steer(unpackButtons(input.buttons), TICK_DT, this.world, input.seq);
+        entry.ship.steer(controlsOf(input), TICK_DT, this.world, input.seq);
       }
     }
     this.world.step(TICK_DT);

@@ -60,6 +60,22 @@ describe("iron dust", () => {
   });
 });
 
+describe("asteroid hits a ship", () => {
+  test("it takes 10 hp and breaks the asteroid half of the time", () => {
+    let broken = 0;
+    for (let seed = 1; seed <= 100; seed++) {
+      const world = new World({ seed });
+      const ship = world.spawn(new Ship({ pos: new Vector2(2000, 1300) }));
+      const a = rock(world, 2000 + 40, 1300, 30, -50);
+      world.step(dt);
+      expect(ship.hp).toBe(SHIP.maxHp - ROCKS.shipDamage);
+      if (!a.alive) broken++;
+    }
+    expect(broken).toBeGreaterThan(30);
+    expect(broken).toBeLessThan(70);
+  });
+});
+
 describe("score", () => {
   test("is lost when the ship dies", () => {
     const ship = new Ship({ pos: new Vector2() });

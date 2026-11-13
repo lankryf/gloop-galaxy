@@ -243,10 +243,14 @@ describe("binary codec", () => {
   });
 
   test("input batches round trip exactly", () => {
-    const record = fc.record({
-      seq: u32.map(seq),
-      buttons: fc.integer({ min: 0, max: MAX_BUTTONS }),
-    });
+    const record = fc.record(
+      {
+        seq: u32.map(seq),
+        buttons: fc.integer({ min: 0, max: MAX_BUTTONS }),
+        aim: fc.integer({ min: -31415, max: 31415 }).map((n) => n / 10000),
+      },
+      { requiredKeys: ["seq", "buttons"] },
+    );
     fc.assert(
       fc.property(fc.array(record, { minLength: 1, maxLength: 16 }), (inputs) => {
         expect(decodeInput(encodeInput(inputs))).toEqual(inputs);

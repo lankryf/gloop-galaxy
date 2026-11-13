@@ -11,7 +11,7 @@ import type { WellType } from "./sim/well.ts";
 import { WELL_TYPES } from "./sim/well.ts";
 
 export const PROTOCOL_VERSION = 0;
-export const BINARY_VERSION = 5;
+export const BINARY_VERSION = 6;
 export const TICK_RATE = 30;
 export const TICK_DT = 1 / TICK_RATE;
 export const MAX_MESSAGE_BYTES = 2048;
@@ -56,6 +56,18 @@ export function packButtons(input: Controls): number {
   return bits;
 }
 
+export function aimOf(angle: number): number {
+  let a = angle % (Math.PI * 2);
+  if (a > Math.PI) a -= Math.PI * 2;
+  if (a < -Math.PI) a += Math.PI * 2;
+  return Math.max(-Math.PI, Math.min(Math.PI, Math.round(a * 10000) / 10000));
+}
+
+export function controlsOf(input: InputRecord): Controls {
+  const controls = unpackButtons(input.buttons);
+  return input.aim === undefined ? controls : { ...controls, aim: input.aim };
+}
+
 export function unpackButtons(bits: number): Controls {
   return {
     thrust: (bits & 1) !== 0,
@@ -81,6 +93,7 @@ const Num = z.number().refine(Number.isFinite, "must be finite");
 export const InputRecordSchema = z.object({
   seq: SeqSchema,
   buttons: z.number().int().min(0).max(MAX_BUTTONS),
+  aim: z.number().min(-Math.PI).max(Math.PI).optional(),
 });
 export type InputRecord = z.infer<typeof InputRecordSchema>;
 

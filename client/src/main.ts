@@ -27,6 +27,7 @@ import { setupCanvas } from "./render/canvas.ts";
 import type { SpriteSheet } from "./render/draw.ts";
 import { drawLoading } from "./screens/loading.ts";
 import { mountChat } from "./ui/chat.ts";
+import { mountControlToggle } from "./ui/controls.ts";
 import { mountDebugToggle } from "./ui/debug.ts";
 import { must } from "./ui/dom.ts";
 
@@ -210,6 +211,7 @@ async function boot(): Promise<void> {
     if (!theme) throw new Error("no arena themes loaded");
 
     if (!session) {
+      mountControlToggle(overlay);
       const game = startGame({
         ctx,
         view,
@@ -242,6 +244,7 @@ function playOnline(
     restarting = true;
   });
   const unmountChat = mountChat(overlay, connection, { you: () => you });
+  const unmountToggle = mountControlToggle(overlay);
   const game = startOnlineGame({
     ctx,
     view,
@@ -259,6 +262,7 @@ function playOnline(
     connection.events.once("closed", ({ code, reason }) => {
       game.stop();
       unmountChat();
+      unmountToggle();
       if (FATAL_CLOSE_CODES.has(code)) {
         resolve(`Сервер закрив з'єднання: ${reason || code}.`);
         return;

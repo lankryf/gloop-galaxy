@@ -32,6 +32,23 @@ describe("integrate", () => {
     expect(integrate(at(0, 0), { ...IDLE, left: true, right: true }, dt).angle).toBe(0);
   });
 
+  test("with a mouse aim the ship turns toward it at aimTurnSpeed and stops there", () => {
+    const first = integrate(at(0, 0), { ...IDLE, aim: 1 }, dt);
+    expect(first.angle).toBeCloseTo(SHIP.aimTurnSpeed * dt, 12);
+    let state = { ...at(0, 0), angle: 0 };
+    for (let i = 0; i < 30; i++) state = { ...integrate(state, { ...IDLE, aim: 1 }, dt) };
+    expect(state.angle).toBeCloseTo(1, 12);
+    const back = integrate(at(0, 0, 0, 0, 3), { ...IDLE, aim: -3 }, dt);
+    expect(back.angle).toBeGreaterThan(3);
+  });
+
+  test("keys win over the mouse aim", () => {
+    expect(integrate(at(0, 0), { ...IDLE, aim: 1, left: true }, dt).angle).toBeCloseTo(
+      -SHIP.turnSpeed * dt,
+      12,
+    );
+  });
+
   test("drag slows a coasting ship", () => {
     const next = integrate(at(100, 100, 200, 0), IDLE, dt);
     expect(next.vx).toBeCloseTo(200 * (1 - SHIP.drag * dt), 9);

@@ -271,3 +271,42 @@ body.debug .roster:not(:empty) {
   opacity: 1;
   color: #8dff3a;
 }
+
+#game {
+  cursor: crosshair;
+}
+
+.control-toggle {
+  pointer-events: auto;
+  position: fixed;
+  right: 246px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(20, 8, 36, 0.75);
+  color: #f4e9ff;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.control-toggle input {
+  accent-color: #8dff3a;
+  cursor: pointer;
+}
+
+.control-hint {
+  position: fixed;
+  left: 364px;
+  bottom: 14px;
+  padding: 5px 12px;
+  border-radius: 10px;
+  background: rgba(20, 8, 36, 0.6);
+  color: #b49ad1;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}

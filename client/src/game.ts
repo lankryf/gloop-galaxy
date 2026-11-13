@@ -46,6 +46,7 @@ import {
   interpolateShip,
   shipFrame,
 } from "./render/draw.ts";
+import { readShipControls } from "./ui/controls.ts";
 import { debug } from "./ui/debug.ts";
 
 export interface OfflineOptions {
@@ -99,14 +100,14 @@ export function startGame({
 
   function readControls(): Controls {
     if (experiment.controls) return experiment.controls(simTime);
-    return {
-      thrust: input.isDown("ArrowUp") || input.isDown("KeyW"),
-      left: input.isDown("ArrowLeft") || input.isDown("KeyA"),
-      right: input.isDown("ArrowRight") || input.isDown("KeyD"),
-      fire: input.isDown("Space"),
-      use: input.isDown("KeyE"),
-      boost: input.isDown("ShiftLeft") || input.isDown("ShiftRight"),
-    };
+    return readShipControls(input, ship.dead ? null : ship.pos, {
+      canvas: ctx.canvas,
+      width: view.width,
+      height: view.height,
+      scale: view.scale,
+      cameraX: camera.x,
+      cameraY: camera.y,
+    });
   }
 
   let wasDead = false;

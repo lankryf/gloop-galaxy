@@ -96,13 +96,18 @@ test("angles are quantized to 1/10000 rad", () => {
 test("input round trip and validation", () => {
   const inputs = [
     { seq: seq(1), buttons: 0b1001 },
-    { seq: seq(2), buttons: 0 },
+    { seq: seq(2), buttons: 0, aim: -1.2345 },
   ];
   assert.deepEqual(binary.decodeInput(binary.encodeInput(inputs)), inputs);
+  const edge = [{ seq: seq(3), buttons: 0, aim: Math.PI }];
+  assert.deepEqual(binary.decodeInput(binary.encodeInput(edge)), edge);
   assert.equal(new Uint8Array(binary.encodeInput(inputs))[0], binary.MessageType.input);
   assert.throws(() => binary.decodeInput(new Uint8Array([1, 1, 5, 0])), binary.CodecError);
   assert.throws(() => binary.decodeInput(new Uint8Array([1, 9, 1, 0, 0, 0, 0, 0])), /version/);
-  assert.throws(() => binary.decodeInput(new Uint8Array([1, 5, 1, 0, 0, 0, 0, 99])), /buttons/);
+  assert.throws(
+    () => binary.decodeInput(new Uint8Array([1, 6, 1, 0, 0, 0, 0, 99, 0, 0])),
+    /buttons/,
+  );
 });
 
 test("truncated or garbage snapshots throw instead of returning junk", () => {

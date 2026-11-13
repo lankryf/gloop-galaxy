@@ -14,6 +14,7 @@ import type { World } from "./world.ts";
 
 export const SHIP = {
   turnSpeed: 3.6,
+  aimTurnSpeed: 6,
   thrust: 420,
   drag: 0.9,
   maxSpeed: 520,
@@ -44,6 +45,7 @@ export interface Controls {
   readonly fire: boolean;
   readonly use?: boolean;
   readonly boost?: boolean;
+  readonly aim?: number;
 }
 
 export const IDLE: Controls = {
@@ -77,7 +79,14 @@ export function integrate(ship: ShipState, input: Controls, dt: number): MovedSh
   let { x, y, vx, vy, angle } = ship;
 
   const turn = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-  angle += turn * SHIP.turnSpeed * dt;
+  if (turn !== 0 || input.aim === undefined) angle += turn * SHIP.turnSpeed * dt;
+  else {
+    let diff = (input.aim - angle) % (Math.PI * 2);
+    if (diff > Math.PI) diff -= Math.PI * 2;
+    if (diff < -Math.PI) diff += Math.PI * 2;
+    const step = SHIP.aimTurnSpeed * dt;
+    angle += Math.max(-step, Math.min(step, diff));
+  }
 
   const boost = input.boost === true;
   const push = boost ? SHIP.thrust * BOOST.thrust : input.thrust ? SHIP.thrust : 0;
@@ -312,12 +321,14 @@ export class Ship extends Entity {
   steer(input: Controls, dt: number, world: World, shot: Seq = seq(0)): void {
     if (this.dead) return;
     const beam = this.beamFor > 0;
-    const controls = {
+    const free = {
       ...input,
       boost: input.boost === true && !this.overheated,
       left: input.left && !beam,
       right: input.right && !beam,
     };
+    const { aim: _aim, ...locked } = free;
+    const controls: Controls = beam ? locked : free;
     const next = shipPhysics(this.state, controls, dt, gravityFields(world, this));
     this.pos = new Vector2(next.x, next.y);
     this.vel = new Vector2(next.vx, next.vy);

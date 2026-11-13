@@ -37,6 +37,9 @@ const ANGLE_SCALE = 10000;
 const HEADER = 12;
 const COMMON = 11;
 const EVENT_SIZE = 12;
+const INPUT_SIZE = 7;
+const NO_AIM = -32768;
+const MAX_AIM = Math.round(Math.PI * 10000);
 const SIZE: Readonly<Record<EntitySnap["kind"], number>> = {
   ship: COMMON + 19,
   bullet: COMMON + 14,
@@ -143,13 +146,15 @@ export function messageType(data: Bytes): number {
 }
 
 export function encodeInput(inputs: readonly InputRecord[]): ArrayBuffer {
-  const view = new DataView(new ArrayBuffer(3 + inputs.length * 5));
+  const view = new DataView(new ArrayBuffer(3 + inputs.length * INPUT_SIZE));
   view.setUint8(0, MessageType.input);
   view.setUint8(1, BINARY_VERSION);
   view.setUint8(2, inputs.length);
-  inputs.forEach(({ seq, buttons }, i) => {
-    view.setUint32(3 + i * 5, seq, true);
-    view.setUint8(7 + i * 5, buttons);
+  inputs.forEach(({ seq, buttons, aim }, i) => {
+    const o = 3 + i * INPUT_SIZE;
+    view.setUint32(o, seq, true);
+    view.setUint8(o + 4, buttons);
+    view.setInt16(o + 5, aim === undefined ? NO_AIM : angleToInt(aim), true);
   });
   return view.buffer;
 }
@@ -160,12 +165,18 @@ export function decodeInput(data: Bytes): InputRecord[] {
   if (view.byteLength < 3) throw new CodecError("input too short");
   const count = view.getUint8(2);
   if (count === 0 || count > 16) throw new CodecError(`bad input count ${count}`);
-  if (view.byteLength !== 3 + count * 5) throw new CodecError("input length mismatch");
+  if (view.byteLength !== 3 + count * INPUT_SIZE) throw new CodecError("input length mismatch");
   const inputs: InputRecord[] = [];
-  for (let i = 0, o = 3; i < count; i++, o += 5) {
+  for (let i = 0, o = 3; i < count; i++, o += INPUT_SIZE) {
     const buttons = view.getUint8(o + 4);
     if (buttons > MAX_BUTTONS) throw new CodecError(`bad buttons ${buttons}`);
-    inputs.push({ seq: readSeq(view, o), buttons });
+    const raw = view.getInt16(o + 5, true);
+    if (raw === NO_AIM) inputs.push({ seq: readSeq(view, o), buttons });
+    else {
+      if (Math.abs(raw) > MAX_AIM) throw new CodecError(`bad aim ${raw}`);
+      const aim = Math.max(-Math.PI, Math.min(Math.PI, raw / ANGLE_SCALE));
+      inputs.push({ seq: readSeq(view, o), buttons, aim });
+    }
   }
   return inputs;
 }

@@ -5,6 +5,7 @@ import { seq as toSeq } from "@gloop/shared/ids.ts";
 import { Pool, removeWhere } from "@gloop/shared/pool.ts";
 import type {
   EntitySnap,
+  InputRecord,
   NetEvent,
   ServerMessageOf,
   ShipSnap,
@@ -61,6 +62,7 @@ import {
 } from "../render/draw.ts";
 import { Minimap } from "../render/minimap.ts";
 import { TextPanel } from "../render/panel.ts";
+import { readShipControls } from "../ui/controls.ts";
 import { debug } from "../ui/debug.ts";
 import { SnapshotBuffer } from "./interpolation.ts";
 import type { Netgraph } from "./netgraph.ts";
@@ -86,6 +88,8 @@ const ENTITY_MARGIN = 120;
 const isFinished = (e: { readonly alive: boolean }) => !e.alive;
 const isExpired = (e: { readonly ttl: number }) => e.ttl <= 0;
 const isDone = (b: Blast) => b.done;
+const toRecord = ({ seq: s, buttons, controls }: PendingInput): InputRecord =>
+  controls.aim === undefined ? { seq: s, buttons } : { seq: s, buttons, aim: controls.aim };
 
 function skillOf(ship: ShipSnap): { skill: string; skillFraction: number } {
   const left = ship.charge / 10;
@@ -208,18 +212,19 @@ export function startOnlineGame({
   const seenShots = new Set<number>();
 
   function readControls(): Controls {
-    const use = input.isDown("KeyE");
+    const ship = predictor.state ?? me;
+    const read = readShipControls(input, ship, {
+      canvas: ctx.canvas,
+      width: view.width,
+      height: view.height,
+      scale: view.scale,
+      cameraX: camera.x,
+      cameraY: camera.y,
+    });
     const beam = me !== null && (me.flags & ShipFlag.pull) !== 0;
-    return {
-      thrust: input.isDown("ArrowUp") || input.isDown("KeyW"),
-      left: !beam && (input.isDown("ArrowLeft") || input.isDown("KeyA")),
-      right: !beam && (input.isDown("ArrowRight") || input.isDown("KeyD")),
-      fire: input.isDown("Space"),
-      use,
-      boost:
-        (input.isDown("ShiftLeft") || input.isDown("ShiftRight")) &&
-        !(me && me.flags & ShipFlag.overheated),
-    };
+    const { aim: _aim, ...still } = read;
+    const controls = beam ? { ...still, left: false, right: false } : read;
+    return { ...controls, boost: read.boost === true && !(me && me.flags & ShipFlag.overheated) };
   }
 
   const setNames = (roster: ServerMessageOf<"roster">) => {
@@ -421,10 +426,8 @@ export function startOnlineGame({
     }
     stepLocalBullets();
 
-    const recent = predictor.pending
-      .slice(-REDUNDANCY)
-      .map(({ seq: s, buttons }) => ({ seq: s, buttons }));
-    if (recent.length === 0) recent.push({ seq: entry.seq, buttons: entry.buttons });
+    const recent = predictor.pending.slice(-REDUNDANCY).map(toRecord);
+    if (recent.length === 0) recent.push(toRecord(entry));
     connection.sendRaw(codec.encodeInput(recent));
     input.endStep();
   }

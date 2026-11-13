@@ -23,6 +23,8 @@ export const ROCKS = {
   splitMin: 24,
   mergeChance: 0.5,
   breakChance: 0.2,
+  shipDamage: 10,
+  shipBreakChance: 0.5,
   settleAge: 0.8,
   dustPerRadius: 1 / 9,
   planetPieces: 10,
@@ -91,7 +93,9 @@ function asteroidShip(world: World, asteroid: Asteroid, ship: Ship): void {
   ship.pos = ship.pos.add(normal.scale(overlap));
   ship.vel = normal.scale(Math.max(160, ship.vel.length() * 0.6));
   world.emit("hit", { x: ship.pos.x, y: ship.pos.y, target: "ship", shipId: ship.id });
-  if (ship.damage(20)) explode(world, ship.pos, 1.4);
+  if (ship.damage(ROCKS.shipDamage)) explode(world, ship.pos, 1.4);
+  if (world.rng.next() < ROCKS.shipBreakChance)
+    crumble(world, asteroid, asteroid.pos.sub(ship.pos));
 }
 
 function pickupShip(world: World, pickup: Pickup, ship: Ship): void {
