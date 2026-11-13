@@ -5,6 +5,8 @@
     "x": 0.18,
     "y": 0.75,
     "r": 95,
-    "color": "#ffd23f"
-  }
+    "color": "#ffd23f",
+    "sprite": "planet7"
+  },
+  "tile": "black"
 }

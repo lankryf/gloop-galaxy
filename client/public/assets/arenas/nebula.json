@@ -5,6 +5,8 @@
     "x": 0.82,
     "y": 0.2,
     "r": 70,
-    "color": "#ff7ad9"
-  }
+    "color": "#ff7ad9",
+    "sprite": "planet3"
+  },
+  "tile": "darkPurple"
 }
