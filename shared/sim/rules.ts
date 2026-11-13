@@ -21,7 +21,7 @@ const SCORE = { ship: 100 };
 export const ROCKS = {
   splitChance: 0.5,
   splitMin: 24,
-  mergeChance: 0.2,
+  mergeChance: 0.5,
   breakChance: 0.2,
   settleAge: 0.8,
   dustPerRadius: 1 / 9,

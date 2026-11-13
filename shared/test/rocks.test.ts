@@ -188,7 +188,7 @@ describe("asteroids and planets", () => {
     expect([...world.ofKind("well")].some((w) => w.type === "planet")).toBe(true);
   });
 
-  test("colliding asteroids merge 20% of the time, break 20% of the time, otherwise bounce", () => {
+  test("colliding asteroids merge half of the time, break 20% of the time, otherwise bounce", () => {
     const seen = { merge: 0, crumble: 0, bounce: 0 };
     for (let seed = 1; seed <= 200; seed++) {
       const world = new World({ seed });
@@ -207,11 +207,12 @@ describe("asteroids and planets", () => {
         expect(left.length).toBeGreaterThanOrEqual(4);
       }
     }
-    expect(seen.merge).toBeGreaterThan(20);
-    expect(seen.merge).toBeLessThan(60);
+    expect(seen.merge).toBeGreaterThan(75);
+    expect(seen.merge).toBeLessThan(125);
     expect(seen.crumble).toBeGreaterThan(20);
     expect(seen.crumble).toBeLessThan(60);
-    expect(seen.bounce).toBeGreaterThan(90);
+    expect(seen.bounce).toBeGreaterThan(35);
+    expect(seen.bounce).toBeLessThan(85);
   });
 
   test("fresh pieces do not merge or break right away", () => {
