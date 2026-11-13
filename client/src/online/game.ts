@@ -645,6 +645,15 @@ export function startOnlineGame({
           assertNever(e);
       }
     }
+    if (pose && me?.ability === "nuke") {
+      const length = rayToEdge(pose.x, pose.y, pose.angle, ARENA);
+      minimap.course(
+        ctx,
+        pose,
+        { x: pose.x + Math.cos(pose.angle) * length, y: pose.y + Math.sin(pose.angle) * length },
+        "rgba(255, 210, 63, 0.9)",
+      );
+    }
     if (pose) minimap.dot(ctx, pose, 3.5, "#8dff3a");
     const self = me;
     if (pose && self && self.flags & ShipFlag.warp) {

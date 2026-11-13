@@ -93,8 +93,8 @@ export class Minimap {
     ctx.rect(this.left, this.top, width, height);
     ctx.clip();
     ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([3, 3]);
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
     ctx.beginPath();
     ctx.moveTo(this.left + from.x * this.#sx, this.top + from.y * this.#sy);
     ctx.lineTo(this.left + to.x * this.#sx, this.top + to.y * this.#sy);
