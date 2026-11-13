@@ -618,49 +618,19 @@ function shapeFor(id: number): readonly number[] {
   return shape;
 }
 
-export function drawForming(
-  ctx: Ctx,
-  p: Point,
-  radius: number,
-  progress: number,
-  time: number,
-): void {
+export function drawForming(ctx: Ctx, p: Point, radius: number, progress: number): void {
   if (progress <= 0) return;
+  const r = radius * 1.3;
   ctx.save();
-  ctx.globalCompositeOperation = "lighter";
-  const glow = ctx.createRadialGradient(
-    p.x,
-    p.y,
-    radius * 0.6,
-    p.x,
-    p.y,
-    radius * (1.4 + progress),
-  );
-  glow.addColorStop(0, `rgba(255, 150, 70, ${0.15 + 0.45 * progress})`);
-  glow.addColorStop(1, "rgba(255, 120, 60, 0)");
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, radius * (1.4 + progress), 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "rgba(255, 210, 160, 0.8)";
-  const bits = 10;
-  for (let i = 0; i < bits; i++) {
-    const a = time / (900 - 500 * progress) + (i / bits) * Math.PI * 2;
-    const d = radius * (1.9 - 0.7 * progress) + Math.sin(time / 300 + i) * 4;
-    ctx.beginPath();
-    ctx.arc(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d * 0.6, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalCompositeOperation = "source-over";
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
   ctx.lineWidth = 4;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
   ctx.beginPath();
-  ctx.arc(p.x, p.y, radius * 1.35, 0, Math.PI * 2);
+  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
   ctx.stroke();
   ctx.strokeStyle = "#ffb347";
   ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.arc(p.x, p.y, radius * 1.35, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+  ctx.arc(p.x, p.y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
   ctx.stroke();
   ctx.restore();
 }

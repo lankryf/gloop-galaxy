@@ -170,7 +170,7 @@ export function startGame({
       const p = interpolate(a, alpha);
       if (!camera.place(p.x, p.y)) continue;
       drawAsteroid(ctx, a, p, sprites);
-      drawForming(ctx, p, a.radius, a.formingProgress, now);
+      drawForming(ctx, p, a.radius, a.formingProgress);
     }
     for (const b of world.ofKind("bullet")) {
       const p = interpolate(b, alpha);

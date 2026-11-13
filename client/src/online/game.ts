@@ -512,7 +512,7 @@ export function startOnlineGame({
         return;
       case "asteroid":
         drawAsteroid(ctx, e, e, sprites);
-        drawForming(ctx, e, e.radius, e.forming / 100, now);
+        drawForming(ctx, e, e.radius, e.forming / 100);
         return;
       case "bullet":
         if (!(options.prediction && e.owner === myShip)) {
