@@ -211,8 +211,10 @@ export function startOnlineGame({
       left: input.isDown("ArrowLeft") || input.isDown("KeyA"),
       right: input.isDown("ArrowRight") || input.isDown("KeyD"),
       fire: input.isDown("Space"),
-      use: input.isDown("KeyE") || input.isDown("ShiftLeft"),
-      boost: input.isDown("KeyQ") && !(me && me.flags & ShipFlag.overheated),
+      use: input.isDown("KeyE"),
+      boost:
+        (input.isDown("ShiftLeft") || input.isDown("ShiftRight")) &&
+        !(me && me.flags & ShipFlag.overheated),
     };
   }
 
