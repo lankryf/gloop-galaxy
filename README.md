@@ -1,8 +1,6 @@
 # Gloop Galaxy
 
-![ci](https://github.com/GITHUB_USER/gloop-galaxy/actions/workflows/ci.yml/badge.svg)
-
-$${\color{red}\text{ЗАМІНИТИ: у рядку з бейджем вище поставити свій логін GitHub замість GITHUB\_USER (і назву репозиторію, якщо вона інша), потім видалити цей рядок}}$$
+![ci](https://github.com/lankryf/gloop-galaxy/actions/workflows/ci.yml/badge.svg)
 
 Мультиплеєрна аркада в браузері: мультяшні кораблики, астероїди, бонуси, чорні діри й планети, які тягнуть до себе кулі, кораблі та каміння. До 16 пілотів у кімнаті, сервер на Node.js рахує гру 30 разів на секунду, клієнт передбачає власний рух і плавно показує чужий навіть при 100 мс затримки.
 
@@ -128,7 +126,6 @@ flowchart LR
 | `?probe`        | корабель летить сам за фіксованим сценарієм, у консоль раз на секунду пишеться статистика, а через 5 с симуляції – позиція |
 | `?marks`        | вмикає `performance.mark/measure` навколо `simulate`, `render`, `decode`, `reconcile`; результат – `window.gloop.measures()`      |
 | `?worker`       | бінарні знімки декодуються у Web Worker (експеримент з лаби 7, програв)                                                      |
-
 
 ![Арена, мінікарта і спрайти Kenney](docs/img/v1.1-arena.png)
 
