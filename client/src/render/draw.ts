@@ -51,7 +51,8 @@ export interface WellLook {
   readonly type: WellType;
   readonly range: number;
   readonly radius: number;
-  readonly timeLeft: number;
+  readonly mass: number;
+  readonly capacity: number;
 }
 
 export interface ExplosionLook {
@@ -92,9 +93,8 @@ const NEBULAE: readonly (readonly [number, number])[] = [
   [0.7, 0.65],
 ];
 
-const DEFAULT_THEME: Pick<Theme, "background" | "planet" | "tile"> = {
+const DEFAULT_THEME: Pick<Theme, "background" | "tile"> = {
   background: ["#3d1b63", "#140a24"],
-  planet: { x: 0.82, y: 0.2, r: 70, color: "#ff7ad9" },
 };
 
 interface CachedBackground {
@@ -105,7 +105,14 @@ interface CachedBackground {
 
 let cachedBackground: CachedBackground | null = null;
 
-type BackgroundTheme = Pick<Theme, "background" | "planet" | "tile">;
+type BackgroundTheme = Pick<Theme, "background" | "tile">;
+
+export interface VisibleArea {
+  readonly x: number;
+  readonly y: number;
+  readonly halfW: number;
+  readonly halfH: number;
+}
 
 export function drawCachedBackground(
   ctx: Ctx,
@@ -113,6 +120,7 @@ export function drawCachedBackground(
   view: View,
   theme: BackgroundTheme = DEFAULT_THEME,
   sprites: Sprites | null = null,
+  visible: VisibleArea | null = null,
 ): void {
   const pixels = Math.min(1, view.scale * view.dpr);
   if (cachedBackground?.theme !== theme || cachedBackground.pixels !== pixels) {
@@ -128,7 +136,28 @@ export function drawCachedBackground(
     drawBackground(off, arena, theme, sprites);
     cachedBackground = { canvas, theme, pixels };
   }
-  ctx.drawImage(cachedBackground.canvas, 0, 0, arena.width, arena.height);
+  const area = visible ?? {
+    x: arena.width / 2,
+    y: arena.height / 2,
+    halfW: arena.width,
+    halfH: arena.height,
+  };
+  const left = Math.max(0, area.x - area.halfW);
+  const top = Math.max(0, area.y - area.halfH);
+  const right = Math.min(arena.width, area.x + area.halfW);
+  const bottom = Math.min(arena.height, area.y + area.halfH);
+  if (right <= left || bottom <= top) return;
+  ctx.drawImage(
+    cachedBackground.canvas,
+    left * pixels,
+    top * pixels,
+    (right - left) * pixels,
+    (bottom - top) * pixels,
+    left,
+    top,
+    right - left,
+    bottom - top,
+  );
 }
 
 function tilePattern(ctx: Ctx, sheet: SpriteSheet, name: string): CanvasPattern | null {
@@ -167,16 +196,6 @@ export function drawBackground(
   }
   ctx.globalAlpha = 1;
 
-  const { x, y, r, color, sprite } = theme.planet;
-  const px = arena.width * x;
-  const py = arena.height * y;
-  const planets = sprites?.planets;
-  if (planets && sprite) {
-    ctx.globalAlpha = 0.55;
-    drawSprite(ctx, planets, sprite, px, py, 0, (r * 2.4) / 150);
-    ctx.globalAlpha = 1;
-    return;
-  }
   if (pattern) return;
 
   stars ??= makeStars(
@@ -191,12 +210,6 @@ export function drawBackground(
     ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
     ctx.fill();
   }
-  ctx.globalAlpha = 1;
-  ctx.globalAlpha = 0.45;
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(px, py, r, 0, Math.PI * 2);
-  ctx.fill();
   ctx.globalAlpha = 1;
 }
 
@@ -607,40 +620,139 @@ function drawRange(ctx: Ctx, x: number, y: number, range: number, color: string)
   ctx.restore();
 }
 
-function drawBlackHole(ctx: Ctx, w: WellLook, p: Pose, time: number): void {
-  const warning = w.timeLeft < 3 && Math.floor(time / 120) % 2 === 0;
-  drawRange(ctx, p.x, p.y, w.range, "rgba(141, 255, 58, 0.12)");
-  drawRange(ctx, p.x, p.y, w.range * 0.45, "rgba(255, 122, 217, 0.18)");
+const DISK_TILT = -0.28;
+const DISK_SQUASH = 0.26;
+const DISK_STOPS: readonly [number, string][] = [
+  [0, "rgba(255, 250, 230, 0.95)"],
+  [0.2, "rgba(255, 196, 110, 0.85)"],
+  [0.5, "rgba(150, 50, 20, 0.45)"],
+  [0.8, "rgba(255, 170, 90, 0.8)"],
+  [1, "rgba(255, 250, 230, 0.95)"],
+];
 
+function diskHalf(ctx: Ctx, r: number, front: boolean): void {
   ctx.save();
-  ctx.translate(p.x, p.y);
-  ctx.rotate(p.angle);
-  for (let i = 0; i < 3; i++) {
-    ctx.rotate((Math.PI * 2) / 3);
-    ctx.strokeStyle = i % 2 ? "rgba(255, 122, 217, 0.75)" : "rgba(141, 255, 58, 0.75)";
-    ctx.lineWidth = 7 - i;
+  ctx.rotate(DISK_TILT);
+  ctx.scale(1, DISK_SQUASH);
+  const conic = ctx.createConicGradient(Math.PI, 0, 0);
+  for (const [at, color] of DISK_STOPS) conic.addColorStop(at, color);
+  const from = front ? 0 : Math.PI;
+  const to = front ? Math.PI : Math.PI * 2;
+  for (let i = 0; i < 6; i++) {
+    ctx.globalAlpha = 0.9 - i * 0.13;
+    ctx.strokeStyle = conic;
+    ctx.lineWidth = r * 0.34;
     ctx.beginPath();
-    ctx.arc(0, 0, w.radius * 2.1, 0, Math.PI * 0.9);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, 0, w.radius * 1.55, Math.PI, Math.PI * 1.7);
+    ctx.arc(0, 0, r * (1.7 + i * 0.32), from, to);
     ctx.stroke();
   }
   ctx.restore();
+}
 
-  const glow = ctx.createRadialGradient(p.x, p.y, w.radius * 0.6, p.x, p.y, w.radius * 1.6);
-  glow.addColorStop(0, "#000000");
-  glow.addColorStop(0.6, "#05010a");
-  glow.addColorStop(1, warning ? "rgba(255, 92, 92, 0)" : "rgba(141, 255, 58, 0)");
-  ctx.fillStyle = glow;
+function diskStreaks(ctx: Ctx, r: number, time: number): void {
+  ctx.save();
+  ctx.rotate(DISK_TILT);
+  ctx.scale(1, DISK_SQUASH);
+  ctx.globalAlpha = 0.35;
+  ctx.strokeStyle = "rgba(255, 240, 210, 0.9)";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([r * 0.5, r * 0.9]);
+  for (let i = 0; i < 3; i++) {
+    ctx.lineDashOffset = (-time / (14 + i * 6)) % 1000;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * (2 + i * 0.55), 0, Math.PI);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+const holeCache = new Map<number, HTMLCanvasElement>();
+
+function blackHoleImage(r: number): HTMLCanvasElement {
+  const cached = holeCache.get(r);
+  if (cached) return cached;
+  const size = Math.ceil(r * 12);
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+  ctx.translate(size / 2, size / 2);
+  const lens = ctx.createRadialGradient(0, 0, r, 0, 0, r * 6);
+  lens.addColorStop(0, "rgba(255, 170, 90, 0.18)");
+  lens.addColorStop(1, "rgba(255, 170, 90, 0)");
+  ctx.fillStyle = lens;
   ctx.beginPath();
-  ctx.arc(p.x, p.y, w.radius * 1.6, 0, Math.PI * 2);
+  ctx.arc(0, 0, r * 6, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = warning ? "#ff5c5c" : GOO;
-  ctx.lineWidth = 3;
+  diskHalf(ctx, r, false);
+  const halo = ctx.createRadialGradient(0, 0, r * 1.02, 0, 0, r * 1.75);
+  halo.addColorStop(0, "rgba(255, 245, 220, 0.95)");
+  halo.addColorStop(0.25, "rgba(255, 190, 110, 0.7)");
+  halo.addColorStop(1, "rgba(255, 120, 60, 0)");
+  ctx.fillStyle = halo;
   ctx.beginPath();
-  ctx.arc(p.x, p.y, w.radius, 0, Math.PI * 2);
+  ctx.arc(0, 0, r * 1.75, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#000000";
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  diskHalf(ctx, r, true);
+  holeCache.set(r, canvas);
+  return canvas;
+}
+
+function fillColor(fill: number): string {
+  if (fill > 0.85) return "#ff4f4f";
+  if (fill > 0.6) return "#ffb347";
+  return "#8dff3a";
+}
+
+function drawBlackHole(ctx: Ctx, w: WellLook, p: Pose, time: number): void {
+  const r = w.radius;
+  const fill = w.capacity > 0 ? Math.min(1, w.mass / w.capacity) : 0;
+  const critical = fill > 0.85;
+  drawRange(
+    ctx,
+    p.x,
+    p.y,
+    w.range,
+    critical ? "rgba(255, 79, 79, 0.3)" : "rgba(255, 196, 110, 0.12)",
+  );
+
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  const image = blackHoleImage(r);
+  ctx.drawImage(image, -image.width / 2, -image.height / 2);
+  diskStreaks(ctx, r, time);
+
+  const pulse = critical ? 0.6 + 0.4 * Math.sin(time / 90) : 1;
+  const bar = r * 3.4;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.arc(0, 0, bar, 0, Math.PI * 2);
   ctx.stroke();
+  if (fill > 0) {
+    ctx.globalAlpha = pulse;
+    ctx.strokeStyle = fillColor(fill);
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(0, 0, bar, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * fill);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.font = `bold ${Math.round(r * 0.75)}px sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = critical ? "#ff8080" : "#ffffff";
+  ctx.fillText(String(Math.floor(w.mass)), 0, 1);
+  ctx.textAlign = "start";
+  ctx.textBaseline = "alphabetic";
+  ctx.restore();
 }
 
 function drawPlanet(ctx: Ctx, w: WellLook, p: Pose): void {

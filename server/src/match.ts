@@ -1,4 +1,4 @@
-import { ARENAS } from "@gloop/shared/arenas.ts";
+import { ARENAS, populate } from "@gloop/shared/arenas.ts";
 import * as binary from "@gloop/shared/codec/binary.ts";
 import type { CodecName } from "@gloop/shared/codec/codec.ts";
 import { jsonCodec } from "@gloop/shared/codec/codec.ts";
@@ -13,12 +13,9 @@ import {
   unpackButtons,
 } from "@gloop/shared/protocol.ts";
 import { ARENA } from "@gloop/shared/sim/arena.ts";
-import { Asteroid } from "@gloop/shared/sim/asteroid.ts";
 import type { AnyEntity } from "@gloop/shared/sim/kinds.ts";
-import { Pickup } from "@gloop/shared/sim/pickup.ts";
 import { Ship } from "@gloop/shared/sim/ship.ts";
 import { Vector2 } from "@gloop/shared/sim/vector.ts";
-import { GravityWell } from "@gloop/shared/sim/well.ts";
 import { World } from "@gloop/shared/sim/world.ts";
 import type { PlayerInput } from "./bot.ts";
 import { metrics } from "./metrics.ts";
@@ -53,7 +50,8 @@ function flagsOf(ship: Ship): number {
   if (ship.effects.has("shield")) flags |= ShipFlag.shield;
   if (ship.effects.has("rapid")) flags |= ShipFlag.rapid;
   if (ship.effects.has("homing")) flags |= ShipFlag.homing;
-  if (ship.effects.has("pull")) flags |= ShipFlag.pull;
+  if (ship.beaming) flags |= ShipFlag.pull;
+  if (ship.warpIn > 0) flags |= ShipFlag.warp;
   if (!ship.inputDriven) flags |= ShipFlag.bot;
   return flags;
 }
@@ -73,6 +71,7 @@ function snapshotOf(e: AnyEntity): EntitySnap | null {
         score: Math.min(e.score, 0xffff),
         respawn: e.dead ? Math.max(0, Math.ceil(e.respawnIn * 10)) : 0,
         ability: e.ability,
+        charge: Math.min(255, Math.ceil((e.ability === "gravity" ? e.charge : e.warpIn) * 10)),
       };
     case "missile":
       return { ...base, kind: "missile", vx: e.vel.x, vy: e.vel.y, owner: e.ownerId, type: e.type };
@@ -96,9 +95,7 @@ function snapshotOf(e: AnyEntity): EntitySnap | null {
         vy: e.vel.y,
         angle: e.angle,
         type: e.type,
-        timeLeft: Number.isFinite(e.timeLeft)
-          ? Math.min(0xfffe, Math.max(0, Math.round(e.timeLeft * 10)))
-          : 0xffff,
+        mass: Math.min(0xffff, Math.round(e.mass * 10)),
       };
     case "explosion":
       return null;
@@ -139,10 +136,7 @@ export class Match {
     const arena = ARENAS[room.arena];
     this.room = room;
     this.world = new World({ seed: arena.seed });
-    for (const config of arena.wells) this.world.spawn(GravityWell.fromConfig(config));
-    for (let i = 0; i < arena.asteroids; i++)
-      this.world.spawn(Asteroid.incoming(this.world.rng, ARENA, this.world.rng.range(0, 450)));
-    for (let i = 0; i < arena.pickups; i++) this.world.spawn(Pickup.random(this.world, ARENA));
+    populate(this.world, arena);
     const spot = this.world.findSafeSpot(40, ARENA);
     const dummy = this.world.spawn(
       new Ship({ pos: new Vector2(spot.x, spot.y), angle: 0, name: "манекен" }),
@@ -168,7 +162,10 @@ export class Match {
     events.on("swallowed", (d) =>
       push({ type: "swallowed", x: d.x, y: d.y, what: d.kind, shipId: d.shipId ?? null }),
     );
-    events.on("collapsed", (d) => push({ type: "collapsed", x: d.x, y: d.y }));
+    events.on("collapsed", (d) => push({ type: "collapsed", x: d.x, y: d.y, range: d.range }));
+    events.on("warped", (d) =>
+      push({ type: "warped", x: d.x, y: d.y, shipId: d.shipId, arrive: d.arrive }),
+    );
     events.on("ability", (d) =>
       push({ type: "ability", x: d.x, y: d.y, shipId: d.shipId, ability: d.ability }),
     );

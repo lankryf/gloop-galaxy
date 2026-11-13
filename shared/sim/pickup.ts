@@ -3,12 +3,7 @@ import { Entity } from "./entity.ts";
 import { Vector2 } from "./vector.ts";
 import type { World } from "./world.ts";
 
-export const EFFECT_TYPES: readonly ["shield", "rapid", "homing", "pull"] = [
-  "shield",
-  "rapid",
-  "homing",
-  "pull",
-];
+export const EFFECT_TYPES: readonly ["shield", "rapid", "homing"] = ["shield", "rapid", "homing"];
 export type EffectType = (typeof EFFECT_TYPES)[number];
 
 export const ABILITY_TYPES: readonly ["missile", "nuke", "gravity", "warp"] = [
@@ -34,7 +29,6 @@ export const EFFECT_DURATION: Readonly<Record<EffectType, number>> = {
   shield: 6,
   rapid: 8,
   homing: 8,
-  pull: 5,
 };
 
 export function isAbility(type: PickupType): type is AbilityType {

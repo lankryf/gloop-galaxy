@@ -42,6 +42,11 @@ export class Minimap {
   }
 
   ring(ctx: CanvasRenderingContext2D, p: MinimapDot, worldRadius: number, color: string): void {
+    const { width, height } = MINIMAP;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(this.left, this.top, width, height);
+    ctx.clip();
     ctx.strokeStyle = color;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -53,6 +58,7 @@ export class Minimap {
       Math.PI * 2,
     );
     ctx.stroke();
+    ctx.restore();
   }
 
   viewport(ctx: CanvasRenderingContext2D, camera: Camera): void {

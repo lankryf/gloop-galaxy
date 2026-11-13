@@ -31,7 +31,7 @@ test("different seed gives a different world", () => {
 
 test("shipPhysics is what the server applies to an input-driven ship", () => {
   const world = new World({ seed: 3 });
-  world.spawn(GravityWell.fromConfig({ type: "planet", x: 0.5, y: 0.5 }));
+  world.spawn(GravityWell.planet({ x: 0.5, y: 0.5 }));
   const ship = world.spawn(new Ship({ pos: new Vector2(500, 300), inputDriven: true }));
   let predicted = quantizeShip(ship.state);
   const planet = world.get(entityId(1));
@@ -81,5 +81,5 @@ test("ships bounce off the arena wall", () => {
 });
 
 test("scenario hash matches the value computed in Chrome", () => {
-  assert.equal(hashWorld(runScenario({ steps: 1000 })), "31aaac49");
+  assert.equal(hashWorld(runScenario({ steps: 1000 })), "e7e5363f");
 });

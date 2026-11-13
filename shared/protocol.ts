@@ -11,7 +11,7 @@ import type { WellType } from "./sim/well.ts";
 import { WELL_TYPES } from "./sim/well.ts";
 
 export const PROTOCOL_VERSION = 0;
-export const BINARY_VERSION = 2;
+export const BINARY_VERSION = 3;
 export const TICK_RATE = 30;
 export const TICK_DT = 1 / TICK_RATE;
 export const MAX_MESSAGE_BYTES = 2048;
@@ -34,7 +34,16 @@ export const FATAL_CLOSE_CODES: ReadonlySet<number> = new Set([
   CloseCode.noRoom,
 ]);
 
-export const ShipFlag = { thrust: 1, dead: 2, shield: 4, rapid: 8, homing: 16, bot: 32, pull: 64 };
+export const ShipFlag = {
+  thrust: 1,
+  dead: 2,
+  shield: 4,
+  rapid: 8,
+  homing: 16,
+  bot: 32,
+  pull: 64,
+  warp: 128,
+};
 
 const BUTTONS: readonly (keyof Controls)[] = ["thrust", "left", "right", "fire", "use"];
 export const MAX_BUTTONS = (1 << BUTTONS.length) - 1;
@@ -116,6 +125,7 @@ const ShipSnapSchema = z.object({
   score: z.number().int().min(0).max(0xffff),
   respawn: z.number().int().min(0).max(255),
   ability: AbilityTypeSchema.nullable(),
+  charge: z.number().int().min(0).max(255),
 });
 const BulletSnapSchema = z.object({
   kind: z.literal("bullet"),
@@ -162,7 +172,7 @@ const WellSnapSchema = z.object({
   vy: Num,
   angle: Num,
   type: WellTypeSchema,
-  timeLeft: z.number().int().min(0).max(0xffff),
+  mass: z.number().int().min(0).max(0xffff),
 });
 export const EntitySnapSchema = z.discriminatedUnion("kind", [
   ShipSnapSchema,
@@ -199,7 +209,13 @@ export const NetEventSchema = z.discriminatedUnion("type", [
     what: z.enum(["bullet", "asteroid", "ship"]),
     shipId: EntityIdSchema.nullable(),
   }),
-  z.object({ type: z.literal("collapsed"), ...at }),
+  z.object({ type: z.literal("collapsed"), ...at, range: z.number().int().min(0).max(0xffff) }),
+  z.object({
+    type: z.literal("warped"),
+    ...at,
+    shipId: EntityIdSchema,
+    arrive: z.boolean(),
+  }),
   z.object({
     type: z.literal("ability"),
     ...at,

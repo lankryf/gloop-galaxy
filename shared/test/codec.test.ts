@@ -22,6 +22,7 @@ const snapshot: Snapshot = {
       score: 1230,
       respawn: 0,
       ability: null,
+      charge: 0,
     },
     {
       kind: "bullet",
@@ -52,7 +53,7 @@ const snapshot: Snapshot = {
       vy: 9,
       angle: 1.25,
       type: "blackhole",
-      timeLeft: 297,
+      mass: 297,
     },
   ],
   events: [
@@ -96,7 +97,7 @@ test("input round trip and validation", () => {
   assert.equal(new Uint8Array(binary.encodeInput(inputs))[0], binary.MessageType.input);
   assert.throws(() => binary.decodeInput(new Uint8Array([1, 1, 5, 0])), binary.CodecError);
   assert.throws(() => binary.decodeInput(new Uint8Array([1, 9, 1, 0, 0, 0, 0, 0])), /version/);
-  assert.throws(() => binary.decodeInput(new Uint8Array([1, 2, 1, 0, 0, 0, 0, 99])), /buttons/);
+  assert.throws(() => binary.decodeInput(new Uint8Array([1, 3, 1, 0, 0, 0, 0, 99])), /buttons/);
 });
 
 test("truncated or garbage snapshots throw instead of returning junk", () => {

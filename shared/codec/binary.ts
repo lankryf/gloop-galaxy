@@ -28,6 +28,7 @@ const EVENT_CODE: Readonly<Record<NetEvent["type"], number>> = {
   swallowed: 6,
   collapsed: 7,
   ability: 8,
+  warped: 9,
 };
 const SWALLOWED: readonly ["bullet", "asteroid", "ship"] = ["bullet", "asteroid", "ship"];
 const ANGLE_SCALE = 10000;
@@ -35,7 +36,7 @@ const HEADER = 12;
 const COMMON = 11;
 const EVENT_SIZE = 12;
 const SIZE: Readonly<Record<EntitySnap["kind"], number>> = {
-  ship: COMMON + 16,
+  ship: COMMON + 17,
   bullet: COMMON + 14,
   asteroid: COMMON + 4,
   pickup: COMMON + 1,
@@ -172,6 +173,7 @@ function writeEntity(view: DataView, o: number, e: EntitySnap): number {
       view.setUint16(p + 12, e.score, true);
       view.setUint8(p + 14, e.respawn);
       view.setUint8(p + 15, e.ability === null ? 0 : ABILITY_TYPES.indexOf(e.ability) + 1);
+      view.setUint8(p + 16, e.charge);
       break;
     case "missile":
       view.setFloat32(p, e.vx, true);
@@ -198,7 +200,7 @@ function writeEntity(view: DataView, o: number, e: EntitySnap): number {
       view.setFloat32(p + 4, e.vy, true);
       view.setInt16(p + 8, angleToInt(e.angle), true);
       view.setUint8(p + 10, WELL_TYPES.indexOf(e.type));
-      view.setUint16(p + 11, e.timeLeft, true);
+      view.setUint16(p + 11, e.mass, true);
       break;
     default:
       return assertNever(e);
@@ -221,7 +223,9 @@ function eventFields(ev: NetEvent): [number, number] {
     case "swallowed":
       return [ev.shipId ?? 0, SWALLOWED.indexOf(ev.what)];
     case "collapsed":
-      return [0, 0];
+      return [Math.min(0xffff, Math.round(ev.range)), 0];
+    case "warped":
+      return [ev.shipId, ev.arrive ? 1 : 0];
     case "ability":
       return [ev.shipId, ABILITY_TYPES.indexOf(ev.ability)];
     default:
@@ -299,6 +303,7 @@ function readEntity(view: DataView, o: number): EntitySnap {
         score: view.getUint16(p + 12, true),
         respawn: view.getUint8(p + 14),
         ability: abilityOrNull(view.getUint8(p + 15)),
+        charge: view.getUint8(p + 16),
       };
     case "missile":
       return {
@@ -344,7 +349,7 @@ function readEntity(view: DataView, o: number): EntitySnap {
         vy: view.getFloat32(p + 4, true),
         angle: view.getInt16(p + 8, true) / ANGLE_SCALE,
         type: wellAt(view.getUint8(p + 10)),
-        timeLeft: view.getUint16(p + 11, true),
+        mass: view.getUint16(p + 11, true),
       };
     default:
       return assertNever(kind);
@@ -376,7 +381,9 @@ function readEvent(view: DataView, o: number): NetEvent {
     case EVENT_CODE.swallowed:
       return { type: "swallowed", x, y, what: swallowedAt(b), shipId: readOptionalId(view, o + 9) };
     case EVENT_CODE.collapsed:
-      return { type: "collapsed", x, y };
+      return { type: "collapsed", x, y, range: view.getUint16(o + 9, true) };
+    case EVENT_CODE.warped:
+      return { type: "warped", x, y, shipId: readId(view, o + 9), arrive: b === 1 };
     case EVENT_CODE.ability:
       return { type: "ability", x, y, shipId: readId(view, o + 9), ability: abilityAt(b) };
     default:

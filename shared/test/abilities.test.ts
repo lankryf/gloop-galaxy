@@ -1,9 +1,11 @@
 import { describe, expect, test } from "vitest";
+import { entityId } from "../ids.ts";
+import { ARENA } from "../sim/arena.ts";
 import { Asteroid } from "../sim/asteroid.ts";
-import { MISSILE } from "../sim/missile.ts";
+import { MISSILE, Missile } from "../sim/missile.ts";
 import { Pickup } from "../sim/pickup.ts";
 import { createRng } from "../sim/random.ts";
-import { IDLE, Ship, WARP_DISTANCE } from "../sim/ship.ts";
+import { BEAM_CHARGE, IDLE, SHIP, Ship, WARP_DELAY, WARP_DISTANCE } from "../sim/ship.ts";
 import { Vector2 } from "../sim/vector.ts";
 import { World } from "../sim/world.ts";
 
@@ -43,30 +45,52 @@ describe("abilities", () => {
     expect([...world.ofKind("missile")].length).toBe(1);
   });
 
-  test("warp moves the ship forward but keeps it inside the arena", () => {
+  test("warp jumps forward after a 3 second charge and stays inside the arena", () => {
     const { world, ship } = setup(800, 900);
+    const warps: boolean[] = [];
+    world.events.on("warped", (e) => warps.push(e.arrive));
     ship.applyPickup("warp");
     press(world, ship);
+    for (let t = dt; t < WARP_DELAY - 0.1; t += dt) world.step(dt);
+    expect(ship.pos.x).toBeLessThan(900);
+    expect(warps).toEqual([]);
+    for (let i = 0; i < 6; i++) world.step(dt);
     expect(ship.pos.x).toBeGreaterThan(800 + WARP_DISTANCE * 0.9);
+    expect(warps).toEqual([false, true]);
 
-    const edge = setup(3100, 900);
+    const edge = setup(ARENA.width - 100, 900);
     edge.ship.applyPickup("warp");
     press(edge.world, edge.ship);
-    expect(edge.ship.pos.x).toBeLessThan(3200);
+    for (let t = 0; t < WARP_DELAY + 0.2; t += dt) edge.world.step(dt);
+    expect(edge.ship.pos.x).toBeLessThan(ARENA.width);
   });
 
-  test("gravity beam drags what is ahead and leaves the rest", () => {
+  test("gravity beam works only while the key is held and runs out after 5 s", () => {
     const { world, ship } = setup();
     const ahead = world.spawn(new Pickup({ pos: new Vector2(1300, 920), type: "rapid" }));
     const behind = world.spawn(new Pickup({ pos: new Vector2(500, 900), type: "shield" }));
     const aside = world.spawn(new Pickup({ pos: new Vector2(800, 1200), type: "homing" }));
     ship.applyPickup("gravity");
-    press(world, ship);
-    expect(ship.effects.has("pull")).toBe(true);
+    ship.controls = { ...IDLE, use: true };
     for (let i = 0; i < 15; i++) world.step(dt);
-    expect(ahead.pos.x).toBeLessThan(1250);
+    expect(ship.beaming).toBe(true);
+    expect(ahead.pos.x).toBeLessThan(1280);
     expect(behind.pos.x).toBeCloseTo(500, 0);
     expect(aside.pos.y).toBeCloseTo(1200, 0);
+
+    ship.controls = IDLE;
+    world.step(dt);
+    expect(ship.beaming).toBe(false);
+    expect(ship.ability).toBe("gravity");
+    const left = ship.charge;
+    for (let i = 0; i < 30; i++) world.step(dt);
+    expect(ship.charge).toBe(left);
+
+    ship.controls = { ...IDLE, use: true };
+    for (let t = 0; t < BEAM_CHARGE; t += dt) world.step(dt);
+    expect(ship.ability).toBeNull();
+    world.step(dt);
+    expect(ship.beaming).toBe(false);
   });
 
   test("nuke blows up asteroids around but spares its owner", () => {
@@ -87,15 +111,37 @@ describe("abilities", () => {
     expect([...world.ofKind("missile")].length).toBe(0);
   });
 
-  test("homing missile turns toward an enemy ship", () => {
+  test("homing missile turns toward an enemy ship ahead", () => {
     const { world, ship } = setup(800, 900);
-    const enemy = world.spawn(new Ship({ pos: new Vector2(800, 1300), name: "enemy" }));
+    world.spawn(new Ship({ pos: new Vector2(1600, 1250), name: "enemy" }));
     ship.applyPickup("missile");
     press(world, ship);
     const [missile] = world.ofKind("missile");
     if (!missile) throw new Error("no missile");
     for (let i = 0; i < 6; i++) world.step(dt);
     expect(missile.vel.y).toBeGreaterThan(0);
-    expect(enemy.alive).toBe(true);
+    expect(missile.lockedOn).not.toBeNull();
+  });
+
+  test("a ship can dodge the missile by flying sideways", () => {
+    const world = new World();
+    const enemy = world.spawn(
+      new Ship({ pos: new Vector2(1700, 900), angle: Math.PI / 2, name: "enemy" }),
+    );
+    world.spawn(
+      new Missile({
+        pos: new Vector2(900, 900),
+        vel: new Vector2(MISSILE.homing.speed, 0),
+        type: "homing",
+        ownerId: entityId(999),
+      }),
+    );
+    enemy.controls = { ...IDLE, thrust: true };
+    for (let i = 0; i < 30 * 6; i++) world.step(dt);
+    expect(enemy.hp).toBe(100);
+  });
+
+  test("missile is slower than a ship at full speed", () => {
+    expect(MISSILE.homing.speed).toBeLessThan(SHIP.maxSpeed);
   });
 });

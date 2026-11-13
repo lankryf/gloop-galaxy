@@ -12,7 +12,7 @@ import { Pickup } from "./pickup.ts";
 import type { Ship } from "./ship.ts";
 import type { Point } from "./vector.ts";
 import { Vector2 } from "./vector.ts";
-import type { GravityWell } from "./well.ts";
+import { BLACK_HOLE, GravityWell } from "./well.ts";
 import type { World } from "./world.ts";
 
 const SCORE = { asteroid: 10, ship: 100 };
@@ -101,9 +101,53 @@ function asteroidAsteroid(a: Asteroid, b: Asteroid): void {
   b.vel = b.vel.add(normal.scale(va - vb));
 }
 
+export const FEED = { bullet: 1, missile: 4, ship: 20, perAsteroidRadius: 0.4 };
+
+function feed(world: World, well: GravityWell, amount: number): void {
+  well.mass = Math.min(well.capacity, well.mass + amount);
+  if (well.full) collapse(world, well);
+}
+
+export function collapse(world: World, well: GravityWell): void {
+  if (!well.alive) return;
+  well.alive = false;
+  const at = well.pos;
+  const reach = well.range;
+  world.emit("collapsed", { x: at.x, y: at.y, range: reach });
+  for (const ship of world.ofKind("ship")) {
+    if (ship.dead) continue;
+    const away = ship.pos.sub(at);
+    const d = away.length();
+    if (d > reach) continue;
+    const k = 1 - d / reach;
+    const dir = d > 0 ? away.scale(1 / d) : new Vector2(1, 0);
+    ship.vel = ship.vel.add(dir.scale(900 * k));
+    world.emit("hit", { x: ship.pos.x, y: ship.pos.y, target: "ship", shipId: ship.id });
+    if (ship.damage(Math.round(40 + 140 * k))) explode(world, ship.pos, 1.4);
+  }
+  for (const body of world) {
+    if (!body.alive || body.kind === "ship" || body.kind === "well" || body.kind === "explosion")
+      continue;
+    const away = body.pos.sub(at);
+    const d = away.length();
+    if (d > reach) continue;
+    if (body.kind === "asteroid") {
+      body.alive = false;
+      explode(world, body.pos, body.radius / 35, "#b49ad1");
+      world.later(world.rng.range(1, 3), (w) => w.spawn(Asteroid.incoming(w.rng, ARENA)));
+      continue;
+    }
+    const dir = d > 0 ? away.scale(1 / d) : new Vector2(1, 0);
+    body.vel = body.vel.add(dir.scale(700 * (1 - d / reach)));
+  }
+  world.later(BLACK_HOLE.respawn, (w) => w.spawn(GravityWell.incoming(w.rng, ARENA)));
+}
+
 function bulletWell(world: World, bullet: Bullet, well: GravityWell): void {
   bullet.alive = false;
-  if (!well.solid) world.emit("swallowed", { x: well.pos.x, y: well.pos.y, kind: "bullet" });
+  if (well.solid) return;
+  world.emit("swallowed", { x: well.pos.x, y: well.pos.y, kind: "bullet" });
+  feed(world, well, FEED.bullet);
 }
 
 function asteroidWell(world: World, asteroid: Asteroid, well: GravityWell): void {
@@ -114,6 +158,7 @@ function asteroidWell(world: World, asteroid: Asteroid, well: GravityWell): void
   asteroid.alive = false;
   world.emit("swallowed", { x: well.pos.x, y: well.pos.y, kind: "asteroid" });
   world.later(2, (w) => w.spawn(Asteroid.incoming(w.rng, ARENA)));
+  feed(world, well, asteroid.radius * FEED.perAsteroidRadius);
 }
 
 function shipWell(world: World, ship: Ship, well: GravityWell): void {
@@ -134,6 +179,7 @@ function shipWell(world: World, ship: Ship, well: GravityWell): void {
   }
   ship.kill();
   world.emit("swallowed", { x: well.pos.x, y: well.pos.y, kind: "ship", shipId: ship.id });
+  feed(world, well, FEED.ship);
 }
 
 function both<A extends EntityKind, B extends EntityKind>(
@@ -212,6 +258,7 @@ function missileWell(world: World, missile: Missile, well: GravityWell): void {
   }
   missile.alive = false;
   world.emit("swallowed", { x: well.pos.x, y: well.pos.y, kind: "bullet" });
+  feed(world, well, FEED.missile);
 }
 
 const RULES: readonly Rule[] = [

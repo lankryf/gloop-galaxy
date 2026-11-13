@@ -3,7 +3,7 @@ export interface ArenaSize {
   readonly height: number;
 }
 
-export const ARENA: ArenaSize = { width: 3200, height: 1800 };
+export const ARENA: ArenaSize = { width: 4800, height: 2700 };
 
 export function outside(x: number, y: number, by: number, arena: ArenaSize = ARENA): boolean {
   return x < -by || y < -by || x > arena.width + by || y > arena.height + by;

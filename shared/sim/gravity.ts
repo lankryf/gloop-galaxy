@@ -81,7 +81,7 @@ export function gravityFields(world: World, except: unknown = null): WellField[]
   for (const pickup of world.ofKind("pickup"))
     fields.push(bodyField(pickup.pos.x, pickup.pos.y, pickup.radius));
   for (const ship of world.ofKind("ship")) {
-    if (ship !== except && !ship.dead && ship.effects.has("pull"))
+    if (ship !== except && !ship.dead && ship.beaming)
       fields.push(pullField(ship.pos.x, ship.pos.y, ship.angle));
   }
   return fields;

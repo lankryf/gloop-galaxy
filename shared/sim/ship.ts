@@ -36,7 +36,9 @@ export interface Controls {
 
 export const IDLE: Controls = { thrust: false, left: false, right: false, fire: false, use: false };
 
-export const WARP_DISTANCE = 650;
+export const WARP_DISTANCE = 900;
+export const WARP_DELAY = 3;
+export const BEAM_CHARGE = 5;
 
 export interface ShipState {
   readonly x: number;
@@ -136,6 +138,9 @@ export class Ship extends Entity {
   respawnIn = 0;
   readonly effects = new Map<EffectType, number>();
   ability: AbilityType | null = null;
+  charge = 0;
+  beaming = false;
+  warpIn = 0;
   #usedLast = false;
 
   constructor({
@@ -176,6 +181,8 @@ export class Ship extends Entity {
     this.dead = true;
     this.collidable = false;
     this.effects.clear();
+    this.beaming = false;
+    this.warpIn = 0;
     this.deaths += 1;
     this.respawnIn = SHIP.respawnDelay;
   }
@@ -191,8 +198,10 @@ export class Ship extends Entity {
   }
 
   applyPickup(type: PickupType): void {
-    if (isAbility(type)) this.ability = type;
-    else this.effects.set(type, EFFECT_DURATION[type]);
+    if (isAbility(type)) {
+      this.ability = type;
+      this.charge = type === "gravity" ? BEAM_CHARGE : 0;
+    } else this.effects.set(type, EFFECT_DURATION[type]);
   }
 
   useAbility(world: World): void {
@@ -224,18 +233,10 @@ export class Ship extends Entity {
         );
         return;
       case "gravity":
-        this.effects.set("pull", EFFECT_DURATION.pull);
         return;
-      case "warp": {
-        const r = this.radius;
-        const to = this.pos.add(dir.scale(WARP_DISTANCE));
-        this.pos = new Vector2(
-          Math.min(ARENA.width - r, Math.max(r, to.x)),
-          Math.min(ARENA.height - r, Math.max(r, to.y)),
-        );
-        this.prevPos = this.pos;
+      case "warp":
+        this.warpIn = WARP_DELAY;
         return;
-      }
       default: {
         const never: never = ability;
         throw new Error(`Unknown ability ${String(never)}`);
@@ -276,8 +277,35 @@ export class Ship extends Entity {
     this.cooldown = Math.max(0, this.cooldown - dt);
     if (controls.fire && this.cooldown === 0) this.fire(world, shot);
     const use = controls.use === true;
-    if (use && !this.#usedLast) this.useAbility(world);
+    this.beaming = false;
+    if (this.warpIn > 0) {
+      this.warpIn = Math.max(0, this.warpIn - dt);
+      if (this.warpIn === 0) this.warp(world);
+    } else if (this.ability === "gravity") this.holdBeam(use, dt, world);
+    else if (use && !this.#usedLast) this.useAbility(world);
     this.#usedLast = use;
+  }
+
+  holdBeam(use: boolean, dt: number, world: World): void {
+    this.beaming = use && this.charge > 0;
+    if (!this.beaming) return;
+    if (!this.#usedLast)
+      world.emit("ability", { shipId: this.id, ability: "gravity", x: this.pos.x, y: this.pos.y });
+    this.charge = Math.max(0, this.charge - dt);
+    if (this.charge > 0) return;
+    this.ability = null;
+  }
+
+  warp(world: World): void {
+    const r = this.radius;
+    const to = this.pos.add(Vector2.fromAngle(this.angle, WARP_DISTANCE));
+    world.emit("warped", { shipId: this.id, x: this.pos.x, y: this.pos.y, arrive: false });
+    this.pos = new Vector2(
+      Math.min(ARENA.width - r, Math.max(r, to.x)),
+      Math.min(ARENA.height - r, Math.max(r, to.y)),
+    );
+    this.prevPos = this.pos;
+    world.emit("warped", { shipId: this.id, x: this.pos.x, y: this.pos.y, arrive: true });
   }
 
   override settle(): void {

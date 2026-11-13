@@ -15,9 +15,10 @@ import { ARENA, outside } from "@gloop/shared/sim/arena.ts";
 import { BULLET } from "@gloop/shared/sim/bullet.ts";
 import { Explosion } from "@gloop/shared/sim/explosion.ts";
 import { gravityAt } from "@gloop/shared/sim/gravity.ts";
+import { MISSILE } from "@gloop/shared/sim/missile.ts";
 import { createRng } from "@gloop/shared/sim/random.ts";
 import type { Controls, MovedShip } from "@gloop/shared/sim/ship.ts";
-import { SHIP } from "@gloop/shared/sim/ship.ts";
+import { SHIP, WARP_DELAY, WARP_DISTANCE } from "@gloop/shared/sim/ship.ts";
 import { Vector2 } from "@gloop/shared/sim/vector.ts";
 import { WELLS } from "@gloop/shared/sim/well.ts";
 import type { Theme } from "../assets/manifest.ts";
@@ -31,6 +32,7 @@ import { createLoop } from "../loop.ts";
 import type { Connection } from "../net/connection.ts";
 import type { Percentiles } from "../perf.ts";
 import { measure, measures, Samples } from "../perf.ts";
+import { Blast, drawBlast, drawWarpCharge } from "../render/blast.ts";
 import { Camera } from "../render/camera.ts";
 import type { View } from "../render/canvas.ts";
 import type { ShipPose, Sprites } from "../render/draw.ts";
@@ -69,11 +71,20 @@ const DRAW_ORDER: readonly EntitySnap["kind"][] = [
   "ship",
 ];
 const HUD_REFRESH_MS = 250;
-const WELL_MARGIN = 520;
+const WELL_MARGIN = 900;
 const PICKUP_RADIUS = 18;
 const ENTITY_MARGIN = 120;
 const isFinished = (e: { readonly alive: boolean }) => !e.alive;
 const isExpired = (e: { readonly ttl: number }) => e.ttl <= 0;
+const isDone = (b: Blast) => b.done;
+
+function skillLine(ship: ShipSnap | null): string {
+  if (!ship) return "-";
+  if (ship.flags & ShipFlag.warp) return `варп через ${(ship.charge / 10).toFixed(1)} с`;
+  if (!ship.ability) return "-";
+  if (ship.ability === "gravity") return `промінь ${(ship.charge / 10).toFixed(1)} с [тримай E]`;
+  return `${PICKUP_NAMES[ship.ability].toLowerCase()} [E]`;
+}
 
 interface LocalBullet {
   shot: Seq;
@@ -140,6 +151,11 @@ export function startOnlineGame({
   const explosions: Explosion[] = [];
   const explosionPool = new Pool(() => new Explosion({ pos: new Vector2(), rng }), 8);
   const popups: Popup[] = [];
+  const blasts: Blast[] = [];
+
+  function warpCharge(p: ShipPose, charge: number, now: number): void {
+    drawWarpCharge(ctx, p.x, p.y, p.angle, 1 - charge / 10 / WARP_DELAY, WARP_DISTANCE, now);
+  }
   const releaseExplosion = (e: Explosion) => explosionPool.release(e);
   netgraph.stats.codec = welcome.codec;
   netgraph.stats.prediction = options.prediction;
@@ -206,6 +222,11 @@ export function startOnlineGame({
         audio?.play("hit", { volume: 0.6 });
         return;
       case "exploded":
+        if (ev.size >= 5) {
+          blasts.push(new Blast(ev.x, ev.y, MISSILE.nuke.blast, "nuke", Math.random));
+          audio?.play("explosion", { volume: 1, rate: 0.6 });
+          return;
+        }
         explosions.push(
           explosionPool.acquire().reset({ pos: new Vector2(ev.x, ev.y), rng, size: ev.size }),
         );
@@ -223,16 +244,17 @@ export function startOnlineGame({
         if (ev.shipId === myShip && ev.what === "ship") popup("НЯМ!", ev.x, ev.y);
         return;
       case "collapsed":
+        blasts.push(new Blast(ev.x, ev.y, ev.range, "collapse", Math.random));
         audio?.play("explosion", { volume: 1, rate: 0.3 });
+        return;
+      case "warped":
+        blasts.push(new Blast(ev.x, ev.y, 140, ev.arrive ? "warpIn" : "warpOut", Math.random));
+        if (ev.arrive)
+          audio?.play("ability", { volume: ev.shipId === myShip ? 0.7 : 0.3, rate: 1.5 });
         return;
       case "ability":
         audio?.play("ability", { volume: ev.shipId === myShip ? 0.8 : 0.4 });
         if (ev.shipId === myShip) popup(PICKUP_NAMES[ev.ability], ev.x, ev.y);
-        if (ev.ability === "warp") {
-          explosions.push(
-            explosionPool.acquire().reset({ pos: new Vector2(ev.x, ev.y), rng, size: 0.6 }),
-          );
-        }
         return;
       default:
         assertNever(ev);
@@ -426,7 +448,8 @@ export function startOnlineGame({
             type: e.type,
             range: config.range,
             radius: config.radius,
-            timeLeft: e.timeLeft / 10,
+            mass: e.mass / 10,
+            capacity: config.capacity,
           },
           e,
           now,
@@ -464,6 +487,7 @@ export function startOnlineGame({
         p.angle = e.angle;
         p.thrust = (e.flags & ShipFlag.thrust) !== 0;
         if (e.flags & ShipFlag.pull) drawPull(ctx, p, now);
+        if (e.flags & ShipFlag.warp) warpCharge(p, e.charge, now);
         drawShip(
           ctx,
           p,
@@ -519,7 +543,7 @@ export function startOnlineGame({
       `tick     ${buffer.latest?.tick ?? 0}`,
       `hp       ${hp}`,
       `effects  ${effects.join(", ") || "-"}`,
-      `skill    ${self?.ability ? `${PICKUP_NAMES[self.ability]} [E]` : "-"}`,
+      `skill    ${skillLine(self)}`,
       "",
       ...scores,
     ]);
@@ -534,7 +558,7 @@ export function startOnlineGame({
             ctx,
             e,
             e.type === "blackhole" ? 3 : 5,
-            e.type === "blackhole" ? "#000000" : "#a868c8",
+            e.type === "blackhole" ? "#ffb347" : "#a868c8",
           );
           minimap.ring(
             ctx,
@@ -577,7 +601,7 @@ export function startOnlineGame({
     const pose = isAlive(self) ? ownPose(alpha, self) : null;
     if (pose) camera.follow(pose.x, pose.y);
     camera.begin(ctx, view);
-    drawCachedBackground(ctx, ARENA, view, theme, sprites);
+    drawCachedBackground(ctx, ARENA, view, theme, sprites, camera);
     camera.border(ctx);
     for (const kind of DRAW_ORDER) {
       const margin = kind === "well" ? WELL_MARGIN : ENTITY_MARGIN;
@@ -596,6 +620,7 @@ export function startOnlineGame({
 
     if (isAlive(self) && pose) {
       if (self.flags & ShipFlag.pull) drawPull(ctx, pose, now);
+      if (self.flags & ShipFlag.warp) warpCharge(pose, self.charge, now);
       drawShip(ctx, pose, now, true, sprites);
       if (self.flags & ShipFlag.shield) drawShield(ctx, pose, sprites);
       drawName(ctx, names.get(myShip) ?? "ти", pose.x, pose.y, true);
@@ -607,6 +632,11 @@ export function startOnlineGame({
       drawExplosion(ctx, e);
     }
     removeWhere(explosions, isFinished, releaseExplosion);
+    for (const b of blasts) {
+      b.update(frameSeconds);
+      if (camera.place(b.x, b.y, b.radius)) drawBlast(ctx, b);
+    }
+    removeWhere(blasts, isDone);
     ctx.textAlign = "center";
     for (const p of popups) {
       p.ttl -= frameSeconds;

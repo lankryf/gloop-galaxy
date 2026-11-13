@@ -1,7 +1,8 @@
 import type { ArenaSize } from "./arena.ts";
-import { ARENA } from "./arena.ts";
+import { ARENA, inside, outside } from "./arena.ts";
 import { Entity } from "./entity.ts";
 import type { WellField } from "./gravity.ts";
+import type { Rng } from "./random.ts";
 import { Vector2 } from "./vector.ts";
 import type { World } from "./world.ts";
 
@@ -13,27 +14,26 @@ export interface WellConfig {
   readonly range: number;
   readonly strength: number;
   readonly solid: boolean;
-  readonly life: number;
   readonly spin: number;
+  readonly capacity: number;
 }
 
 export const WELLS: Readonly<Record<WellType, WellConfig>> = {
-  blackhole: { radius: 26, range: 460, strength: 1.2e7, solid: false, life: 30, spin: 2.5 },
-  planet: {
-    radius: 64,
-    range: 340,
-    strength: 4e6,
-    solid: true,
-    life: Number.POSITIVE_INFINITY,
-    spin: 0.08,
-  },
+  blackhole: { radius: 40, range: 640, strength: 2.4e7, solid: false, spin: 2.5, capacity: 100 },
+  planet: { radius: 170, range: 780, strength: 2.8e7, solid: true, spin: 0.03, capacity: 0 },
 };
 
-export interface WellPlacement {
-  readonly type: WellType;
+export const BLACK_HOLE = {
+  spawnGap: 120,
+  lostAfter: 2400,
+  minSpeed: 25,
+  maxSpeed: 60,
+  respawn: 8,
+};
+
+export interface PlanetPlacement {
   readonly x: number;
   readonly y: number;
-  readonly drift?: readonly [number, number];
 }
 
 export class GravityWell extends Entity {
@@ -42,9 +42,10 @@ export class GravityWell extends Entity {
   readonly range: number;
   readonly strength: number;
   readonly solid: boolean;
-  readonly life: number;
   readonly spin: number;
-  age = 0;
+  readonly capacity: number;
+  mass = 0;
+  entered = false;
 
   constructor({ pos, vel = new Vector2(), type }: { pos: Vector2; vel?: Vector2; type: WellType }) {
     const config = WELLS[type];
@@ -53,8 +54,8 @@ export class GravityWell extends Entity {
     this.range = config.range;
     this.strength = config.strength;
     this.solid = config.solid;
-    this.life = config.life;
     this.spin = config.spin;
+    this.capacity = config.capacity;
   }
 
   get field(): WellField {
@@ -67,44 +68,49 @@ export class GravityWell extends Entity {
     };
   }
 
-  bounceOffWalls(arena: ArenaSize = ARENA): void {
-    const margin = this.radius * 2;
-    let { x: vx, y: vy } = this.vel;
-    const { x, y } = this.pos;
-    if ((x < margin && vx < 0) || (x > arena.width - margin && vx > 0)) vx = -vx;
-    if ((y < margin && vy < 0) || (y > arena.height - margin && vy > 0)) vy = -vy;
-    if (vx !== this.vel.x || vy !== this.vel.y) this.vel = new Vector2(vx, vy);
-  }
-
-  get timeLeft(): number {
-    return this.life - this.age;
+  get full(): boolean {
+    return this.capacity > 0 && this.mass >= this.capacity;
   }
 
   override update(dt: number, world: World): void {
     super.update(dt, world);
     this.angle += this.spin * dt;
-    this.bounceOffWalls();
-    this.age += dt;
-    if (this.age < this.life) return;
+    if (this.type !== "blackhole") return;
+    const { x, y } = this.pos;
+    if (!this.entered && inside(x, y, this.radius)) this.entered = true;
+    const gone = this.entered
+      ? outside(x, y, this.radius * 3)
+      : outside(x, y, BLACK_HOLE.lostAfter);
+    if (!gone) return;
     this.alive = false;
-    world.emit("collapsed", { x: this.pos.x, y: this.pos.y });
-    world.later(4, (w) => w.spawn(GravityWell.drifting(w)));
+    world.later(BLACK_HOLE.respawn, (w) => w.spawn(GravityWell.incoming(w.rng, ARENA)));
   }
 
-  static fromConfig(
-    { type, x, y, drift = [0, 0] }: WellPlacement,
-    arena: ArenaSize = ARENA,
-  ): GravityWell {
+  static planet({ x, y }: PlanetPlacement, arena: ArenaSize = ARENA): GravityWell {
+    return new GravityWell({ type: "planet", pos: new Vector2(x * arena.width, y * arena.height) });
+  }
+
+  static incoming(rng: Rng, arena: ArenaSize = ARENA, extraDistance = 0): GravityWell {
+    const away = WELLS.blackhole.radius + BLACK_HOLE.spawnGap + extraDistance;
+    const side = rng.int(0, 3);
+    const along = rng.range(0.1, 0.9);
+    const pos =
+      side === 0
+        ? new Vector2(-away, along * arena.height)
+        : side === 1
+          ? new Vector2(arena.width + away, along * arena.height)
+          : side === 2
+            ? new Vector2(along * arena.width, -away)
+            : new Vector2(along * arena.width, arena.height + away);
+    const target = new Vector2(
+      rng.range(0.25, 0.75) * arena.width,
+      rng.range(0.25, 0.75) * arena.height,
+    );
+    const speed = rng.range(BLACK_HOLE.minSpeed, BLACK_HOLE.maxSpeed);
     return new GravityWell({
-      type,
-      pos: new Vector2(x * arena.width, y * arena.height),
-      vel: new Vector2(drift[0], drift[1]),
+      type: "blackhole",
+      pos,
+      vel: target.sub(pos).normalize().scale(speed),
     });
-  }
-
-  static drifting(world: World, arena: ArenaSize = ARENA): GravityWell {
-    const spot = world.findSafeSpot(WELLS.blackhole.range * 0.4, arena);
-    const vel = Vector2.fromAngle(world.rng.range(0, Math.PI * 2), world.rng.range(8, 22));
-    return new GravityWell({ type: "blackhole", pos: new Vector2(spot.x, spot.y), vel });
   }
 }

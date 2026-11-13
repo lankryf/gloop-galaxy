@@ -35,9 +35,10 @@ const entity: fc.Arbitrary<EntitySnap> = fc.oneof(
     vy: speed,
     angle,
     hp: fc.integer({ min: 0, max: 255 }),
-    flags: fc.integer({ min: 0, max: 127 }),
+    flags: fc.integer({ min: 0, max: 255 }),
     score: fc.integer({ min: 0, max: 0xffff }),
     respawn: fc.integer({ min: 0, max: 255 }),
+    charge: fc.integer({ min: 0, max: 255 }),
     ability: fc.option(fc.constantFrom(...ABILITY_TYPES), { nil: null }),
   }),
   fc.record({
@@ -85,7 +86,7 @@ const entity: fc.Arbitrary<EntitySnap> = fc.oneof(
     vy: speed,
     angle,
     type: fc.constantFrom(...WELL_TYPES),
-    timeLeft: fc.integer({ min: 0, max: 0xffff }),
+    mass: fc.integer({ min: 0, max: 0xffff }),
   }),
 );
 
@@ -126,7 +127,19 @@ const event: fc.Arbitrary<NetEvent> = fc.oneof(
     what: fc.constantFrom("bullet" as const, "asteroid" as const, "ship" as const),
     shipId: shipRef,
   }),
-  fc.record({ type: fc.constant("collapsed" as const), x: coord, y: coord }),
+  fc.record({
+    type: fc.constant("collapsed" as const),
+    x: coord,
+    y: coord,
+    range: fc.integer({ min: 0, max: 0xffff }),
+  }),
+  fc.record({
+    type: fc.constant("warped" as const),
+    x: coord,
+    y: coord,
+    shipId: id,
+    arrive: fc.boolean(),
+  }),
   fc.record({
     type: fc.constant("ability" as const),
     x: coord,
@@ -144,7 +157,7 @@ const snapshot: fc.Arbitrary<Snapshot> = fc.record({
 });
 
 const SIZE: Record<EntitySnap["kind"], number> = {
-  ship: 27,
+  ship: 28,
   bullet: 25,
   asteroid: 15,
   pickup: 12,
@@ -253,7 +266,12 @@ describe("arena", () => {
         fc.array(controls, { minLength: 1000, maxLength: 1000 }),
         (seed, inputs) => {
           const world = new World({ seed });
-          world.spawn(GravityWell.fromConfig({ type: "blackhole", x: 0.5, y: 0.5 }));
+          world.spawn(
+            new GravityWell({
+              type: "blackhole",
+              pos: new Vector2(ARENA.width / 2, ARENA.height / 2),
+            }),
+          );
           const ship = world.spawn(new Ship({ pos: new Vector2(100, 100), inputDriven: true }));
           inputs.forEach((input, i) => {
             ship.steer(input, 1 / 30, world, seq(i + 1));

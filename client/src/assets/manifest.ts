@@ -18,12 +18,5 @@ export const ThemeSchema = z.object({
   name: z.string(),
   background: z.tuple([z.string(), z.string()]),
   tile: z.string().optional(),
-  planet: z.object({
-    x: z.number(),
-    y: z.number(),
-    r: z.number(),
-    color: z.string(),
-    sprite: z.string().optional(),
-  }),
 });
 export type Theme = z.infer<typeof ThemeSchema>;

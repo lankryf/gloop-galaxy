@@ -1,11 +1,10 @@
 import type { ArenaRules } from "@gloop/shared/arenas.ts";
+import { populate } from "@gloop/shared/arenas.ts";
 import { ARENA } from "@gloop/shared/sim/arena.ts";
-import { Asteroid } from "@gloop/shared/sim/asteroid.ts";
-import { Pickup } from "@gloop/shared/sim/pickup.ts";
+import { MISSILE } from "@gloop/shared/sim/missile.ts";
 import type { Controls } from "@gloop/shared/sim/ship.ts";
-import { Ship } from "@gloop/shared/sim/ship.ts";
+import { Ship, WARP_DELAY, WARP_DISTANCE } from "@gloop/shared/sim/ship.ts";
 import { Vector2 } from "@gloop/shared/sim/vector.ts";
-import { GravityWell } from "@gloop/shared/sim/well.ts";
 import { World } from "@gloop/shared/sim/world.ts";
 import type { Theme } from "./assets/manifest.ts";
 import type { Audio } from "./audio.ts";
@@ -15,6 +14,7 @@ import { createHud } from "./hud.ts";
 import type { Input } from "./input.ts";
 import type { Loop, LoopStats } from "./loop.ts";
 import { createLoop } from "./loop.ts";
+import { Blast, drawBlast, drawWarpCharge } from "./render/blast.ts";
 import { Camera } from "./render/camera.ts";
 import type { View } from "./render/canvas.ts";
 import type { Sprites } from "./render/draw.ts";
@@ -67,7 +67,7 @@ export function startGame({
   const hud = createHud(world.events);
   const camera = new Camera(ARENA);
 
-  for (const config of rules.wells) world.spawn(GravityWell.fromConfig(config));
+  populate(world, rules);
   const start = experiment.probe
     ? { x: ARENA.width / 2, y: ARENA.height / 2 }
     : world.findSafeSpot(40, ARENA);
@@ -77,10 +77,6 @@ export function startGame({
     new Ship({ pos: new Vector2(dummySpot.x, dummySpot.y), angle: 0, name: "dummy" }),
   );
   dummy.controls = { thrust: true, left: true, right: false, fire: false };
-  for (let i = 0; i < rules.asteroids; i++) {
-    world.spawn(Asteroid.incoming(world.rng, ARENA, world.rng.range(0, 450)));
-  }
-  for (let i = 0; i < rules.pickups; i++) world.spawn(Pickup.random(world, ARENA));
 
   audio?.listen(world.events, { ownId: () => ship.id });
 
@@ -100,6 +96,17 @@ export function startGame({
   }
 
   let wasDead = false;
+  let blasts: Blast[] = [];
+  let lastFrame = performance.now();
+  world.events.on("exploded", ({ x, y, size }) => {
+    if (size >= 5) blasts.push(new Blast(x, y, MISSILE.nuke.blast, "nuke", Math.random));
+  });
+  world.events.on("collapsed", ({ x, y, range }) => {
+    blasts.push(new Blast(x, y, range, "collapse", Math.random));
+  });
+  world.events.on("warped", ({ x, y, arrive }) => {
+    blasts.push(new Blast(x, y, 140, arrive ? "warpIn" : "warpOut", Math.random));
+  });
 
   function simulate(dt: number): void {
     ship.controls = readControls();
@@ -128,7 +135,7 @@ export function startGame({
       camera.follow(me.x, me.y);
     }
     camera.begin(ctx, view);
-    drawCachedBackground(ctx, ARENA, view, theme, sprites);
+    drawCachedBackground(ctx, ARENA, view, theme, sprites, camera);
     camera.border(ctx);
     for (const w of world.ofKind("well")) {
       const p = interpolate(w, alpha);
@@ -163,7 +170,9 @@ export function startGame({
       if (s.dead) continue;
       const p = interpolateShip(s, alpha);
       if (!camera.place(p.x, p.y)) continue;
-      if (s.effects.has("pull")) drawPull(ctx, p, now);
+      if (s.beaming) drawPull(ctx, p, now);
+      if (s.warpIn > 0)
+        drawWarpCharge(ctx, p.x, p.y, p.angle, 1 - s.warpIn / WARP_DELAY, WARP_DISTANCE, now);
       drawShip(ctx, p, now, s === ship, sprites, shipFrame(s.id, s === ship, s !== ship));
       if (s.effects.has("shield")) drawShield(ctx, p, sprites);
     }
@@ -171,6 +180,13 @@ export function startGame({
       if (!camera.place(e.pos.x, e.pos.y)) continue;
       drawExplosion(ctx, e);
     }
+    const frameSeconds = Math.min(0.1, (now - lastFrame) / 1000);
+    lastFrame = now;
+    for (const b of blasts) {
+      b.update(frameSeconds);
+      if (camera.place(b.x, b.y, b.radius)) drawBlast(ctx, b);
+    }
+    blasts = blasts.filter((b) => !b.done);
     hud.drawWorld(ctx);
 
     drawHud(ctx, view, stats, [
@@ -179,7 +195,15 @@ export function startGame({
       `pilot    ${ship.name}`,
       `score    ${ship.score}`,
       `effects  ${[...ship.effects.keys()].join(", ") || "-"}`,
-      `skill    ${ship.ability ? `${ship.ability} [E]` : "-"}`,
+      `skill    ${
+        ship.warpIn > 0
+          ? `warp ${ship.warpIn.toFixed(1)}s`
+          : ship.ability === "gravity"
+            ? `beam ${ship.charge.toFixed(1)}s [hold E]`
+            : ship.ability
+              ? `${ship.ability} [E]`
+              : "-"
+      }`,
       `hp       ${ship.hp}${ship.dead ? ` (respawn ${ship.respawnIn.toFixed(1)}s)` : ""}`,
       experiment.name ? `exp      ${experiment.name}` : "",
     ]);

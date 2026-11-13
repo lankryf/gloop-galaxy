@@ -48,7 +48,13 @@ export type WorldEvents = {
     readonly kind: "bullet" | "asteroid" | "ship";
     readonly shipId?: EntityId;
   };
-  collapsed: { readonly x: number; readonly y: number };
+  collapsed: { readonly x: number; readonly y: number; readonly range: number };
+  warped: {
+    readonly shipId: EntityId;
+    readonly x: number;
+    readonly y: number;
+    readonly arrive: boolean;
+  };
 };
 
 export type WorldSystem = (world: World, dt: number) => void;

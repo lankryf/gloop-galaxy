@@ -10,8 +10,26 @@ export const MISSILE_TYPES: readonly ["homing", "nuke"] = ["homing", "nuke"];
 export type MissileType = (typeof MISSILE_TYPES)[number];
 
 export const MISSILE = {
-  homing: { speed: 520, turnRate: 3.4, ttl: 4, radius: 10, blast: 130, damage: 70, seek: 1600 },
-  nuke: { speed: 300, turnRate: 0, ttl: 1.6, radius: 16, blast: 460, damage: 130, seek: 0 },
+  homing: {
+    speed: 420,
+    turnRate: 1.5,
+    ttl: 5,
+    radius: 10,
+    blast: 130,
+    damage: 70,
+    seek: 1600,
+    cone: 1,
+  },
+  nuke: {
+    speed: 300,
+    turnRate: 0,
+    ttl: 1.6,
+    radius: 16,
+    blast: 460,
+    damage: 130,
+    seek: 0,
+    cone: 0,
+  },
 } as const;
 
 export class Missile extends Entity {
@@ -19,6 +37,8 @@ export class Missile extends Entity {
   readonly type: MissileType;
   readonly ownerId: EntityId;
   ttl: number;
+  lockedOn: EntityId | null = null;
+  lost = false;
 
   constructor({
     pos,
@@ -32,17 +52,34 @@ export class Missile extends Entity {
     this.ttl = MISSILE[type].ttl;
   }
 
+  inSight(ship: Ship): boolean {
+    const to = ship.pos.sub(this.pos);
+    if (to.length() > MISSILE[this.type].seek) return false;
+    let diff = to.angle() - this.vel.angle();
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    return Math.abs(diff) <= MISSILE[this.type].cone;
+  }
+
   target(world: World): Ship | null {
+    if (this.lost) return null;
+    if (this.lockedOn !== null) {
+      const locked = world.get(this.lockedOn);
+      if (locked?.kind === "ship" && !locked.dead && this.inSight(locked)) return locked;
+      this.lost = true;
+      return null;
+    }
     let best: Ship | null = null;
-    let bestDistance: number = MISSILE[this.type].seek;
+    let bestDistance = Number.POSITIVE_INFINITY;
     for (const ship of world.ofKind("ship")) {
-      if (ship.dead || ship.id === this.ownerId) continue;
+      if (ship.dead || ship.id === this.ownerId || !this.inSight(ship)) continue;
       const d = ship.pos.sub(this.pos).length();
       if (d < bestDistance) {
         bestDistance = d;
         best = ship;
       }
     }
+    if (best) this.lockedOn = best.id;
     return best;
   }
 
