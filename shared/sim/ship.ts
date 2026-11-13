@@ -1,12 +1,12 @@
 import type { Seq } from "../ids.ts";
 import { seq } from "../ids.ts";
-import { ARENA, wrap } from "./arena.ts";
+import { ARENA } from "./arena.ts";
 import { homing } from "./behaviors.ts";
 import { BULLET, Bullet } from "./bullet.ts";
 import { Entity } from "./entity.ts";
 import { cos, hypot, sin } from "./fmath.ts";
 import type { WellField } from "./gravity.ts";
-import { gravityAt, wellFields } from "./gravity.ts";
+import { gravityAt, gravityFields } from "./gravity.ts";
 import type { PickupType } from "./pickup.ts";
 import { EFFECT_DURATION } from "./pickup.ts";
 import { Vector2 } from "./vector.ts";
@@ -22,6 +22,7 @@ export const SHIP = {
   fireCooldown: 0.18,
   rapidCooldown: 0.07,
   respawnDelay: 2,
+  wallBounce: 0.5,
 };
 
 export interface Controls {
@@ -66,8 +67,23 @@ export function integrate(ship: ShipState, input: Controls, dt: number): MovedSh
     vy = (vy / speed) * SHIP.maxSpeed;
   }
 
-  x = wrap(x + vx * dt, ARENA.width);
-  y = wrap(y + vy * dt, ARENA.height);
+  x += vx * dt;
+  y += vy * dt;
+  const r = SHIP.radius;
+  if (x < r) {
+    x = r;
+    if (vx < 0) vx = -vx * SHIP.wallBounce;
+  } else if (x > ARENA.width - r) {
+    x = ARENA.width - r;
+    if (vx > 0) vx = -vx * SHIP.wallBounce;
+  }
+  if (y < r) {
+    y = r;
+    if (vy < 0) vy = -vy * SHIP.wallBounce;
+  } else if (y > ARENA.height - r) {
+    y = ARENA.height - r;
+    if (vy > 0) vy = -vy * SHIP.wallBounce;
+  }
 
   return { x, y, vx, vy, angle, thrust: input.thrust };
 }
@@ -196,7 +212,7 @@ export class Ship extends Entity {
 
   steer(controls: Controls, dt: number, world: World, shot: Seq = seq(0)): void {
     if (this.dead) return;
-    const next = shipPhysics(this.state, controls, dt, wellFields(world));
+    const next = shipPhysics(this.state, controls, dt, gravityFields(world));
     this.pos = new Vector2(next.x, next.y);
     this.vel = new Vector2(next.vx, next.vy);
     this.angle = next.angle;

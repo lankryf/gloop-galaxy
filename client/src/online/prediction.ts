@@ -1,7 +1,8 @@
 import type { Seq } from "@gloop/shared/ids.ts";
 import type { WellSnap } from "@gloop/shared/protocol.ts";
-import { ARENA, wrap } from "@gloop/shared/sim/arena.ts";
+import { ARENA } from "@gloop/shared/sim/arena.ts";
 import type { WellField } from "@gloop/shared/sim/gravity.ts";
+import { bodyField } from "@gloop/shared/sim/gravity.ts";
 import type { Controls, MovedShip, ShipState } from "@gloop/shared/sim/ship.ts";
 import { quantizeShip, shipPhysics } from "@gloop/shared/sim/ship.ts";
 import { WELLS } from "@gloop/shared/sim/well.ts";
@@ -15,6 +16,10 @@ export interface PendingInput {
 export interface MovingWell extends WellField {
   readonly vx: number;
   readonly vy: number;
+}
+
+export function bodyAt(x: number, y: number, radius: number): MovingWell {
+  return { ...bodyField(x, y, radius), vx: 0, vy: 0 };
 }
 
 export function toWellField(e: WellSnap): MovingWell {
@@ -44,8 +49,8 @@ export function wellsAt(
 ): MovingWell[] {
   return wells.map((w) => ({
     ...w,
-    x: wrap(w.x + w.vx * dt * ticksAhead, ARENA.width),
-    y: wrap(w.y + w.vy * dt * ticksAhead, ARENA.height),
+    x: w.x + w.vx * dt * ticksAhead,
+    y: w.y + w.vy * dt * ticksAhead,
   }));
 }
 

@@ -1,5 +1,4 @@
 import type { ArenaSize } from "@gloop/shared/sim/arena.ts";
-import { wrap } from "@gloop/shared/sim/arena.ts";
 import type { PickupType } from "@gloop/shared/sim/pickup.ts";
 import type { Point } from "@gloop/shared/sim/vector.ts";
 import type { WellType } from "@gloop/shared/sim/well.ts";
@@ -86,6 +85,11 @@ function makeStars(width: number, height: number, count: number): Star[] {
 
 let stars: Star[] | null = null;
 
+const NEBULAE: readonly (readonly [number, number])[] = [
+  [0.25, 0.3],
+  [0.7, 0.65],
+];
+
 const DEFAULT_THEME: Pick<Theme, "background" | "planet"> = {
   background: ["#3d1b63", "#140a24"],
   planet: { x: 0.82, y: 0.2, r: 70, color: "#ff7ad9" },
@@ -104,8 +108,9 @@ export function drawCachedBackground(
   arena: ArenaSize,
   view: View,
   theme: Pick<Theme, "background" | "planet"> = DEFAULT_THEME,
+  tiles: readonly (readonly [number, number])[] = [[0, 0]],
 ): void {
-  const pixels = view.scale * view.dpr;
+  const pixels = Math.min(1, view.scale * view.dpr);
   if (cachedBackground?.theme !== theme || cachedBackground.pixels !== pixels) {
     const canvas = document.createElement("canvas");
     canvas.width = Math.ceil(arena.width * pixels);
@@ -119,7 +124,8 @@ export function drawCachedBackground(
     drawBackground(off, arena, theme);
     cachedBackground = { canvas, theme, pixels };
   }
-  ctx.drawImage(cachedBackground.canvas, 0, 0, arena.width, arena.height);
+  for (const [x, y] of tiles)
+    ctx.drawImage(cachedBackground.canvas, x, y, arena.width, arena.height);
 }
 
 export function drawBackground(
@@ -128,20 +134,26 @@ export function drawBackground(
   theme: Pick<Theme, "background" | "planet"> = DEFAULT_THEME,
 ): void {
   const [inner, outer] = theme.background;
-  const g = ctx.createRadialGradient(
-    arena.width * 0.3,
-    arena.height * 0.3,
-    50,
-    arena.width / 2,
-    arena.height / 2,
-    arena.width,
-  );
-  g.addColorStop(0, inner);
-  g.addColorStop(1, outer);
-  ctx.fillStyle = g;
+  ctx.fillStyle = outer;
   ctx.fillRect(0, 0, arena.width, arena.height);
+  const reach = Math.min(arena.width, arena.height) / 2;
+  for (const [fx, fy] of NEBULAE) {
+    const cx = arena.width * fx;
+    const cy = arena.height * fy;
+    const g = ctx.createRadialGradient(cx, cy, 30, cx, cy, reach);
+    g.addColorStop(0, inner);
+    g.addColorStop(1, outer);
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - reach, cy - reach, reach * 2, reach * 2);
+  }
+  ctx.globalAlpha = 1;
 
-  stars ??= makeStars(arena.width, arena.height, 220);
+  stars ??= makeStars(
+    arena.width,
+    arena.height,
+    Math.round((220 * arena.width * arena.height) / (1600 * 900)),
+  );
   for (const s of stars) {
     ctx.globalAlpha = 0.4 + s.a * 0.6;
     ctx.fillStyle = s.a > 0.85 ? GOO : "#f4e9ff";
@@ -168,10 +180,6 @@ export function drawBackground(
   ctx.arc(px + r * 0.35, py - r * 0.3, r * 0.14, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
-
-  ctx.strokeStyle = "rgba(141, 255, 58, 0.25)";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(0, 0, arena.width, arena.height);
 }
 
 export function drawSprite(
@@ -197,15 +205,8 @@ export function drawSprite(
   ctx.restore();
 }
 
-function lerp(a: number, b: number, t: number): number {
+export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
-}
-
-export function lerpWrapped(a: number, b: number, t: number, size: number): number {
-  let d = b - a;
-  if (d > size / 2) d -= size;
-  if (d < -size / 2) d += size;
-  return wrap(lerp(a, a + d, t), size);
 }
 
 export function lerpAngle(a: number, b: number, t: number): number {
@@ -215,10 +216,10 @@ export function lerpAngle(a: number, b: number, t: number): number {
   return a + d * t;
 }
 
-export function interpolate(entity: Moving, alpha: number, arena: ArenaSize): Pose {
+export function interpolate(entity: Moving, alpha: number): Pose {
   return {
-    x: lerpWrapped(entity.prevPos.x, entity.pos.x, alpha, arena.width),
-    y: lerpWrapped(entity.prevPos.y, entity.pos.y, alpha, arena.height),
+    x: lerp(entity.prevPos.x, entity.pos.x, alpha),
+    y: lerp(entity.prevPos.y, entity.pos.y, alpha),
     angle: lerpAngle(entity.prevAngle, entity.angle, alpha),
   };
 }
@@ -226,9 +227,8 @@ export function interpolate(entity: Moving, alpha: number, arena: ArenaSize): Po
 export function interpolateShip(
   ship: Moving & { readonly thrust: boolean },
   alpha: number,
-  arena: ArenaSize,
 ): ShipPose {
-  return { ...interpolate(ship, alpha, arena), thrust: ship.thrust };
+  return { ...interpolate(ship, alpha), thrust: ship.thrust };
 }
 
 function drawFlame(ctx: Ctx, time: number): void {

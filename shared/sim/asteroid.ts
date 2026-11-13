@@ -1,9 +1,12 @@
 import type { ArenaSize } from "./arena.ts";
+import { ARENA, inside, outside } from "./arena.ts";
 import { homing } from "./behaviors.ts";
 import { Entity } from "./entity.ts";
 import type { Rng } from "./random.ts";
 import { Vector2 } from "./vector.ts";
 import type { World } from "./world.ts";
+
+export const ASTEROID_FIELD = { spawnGap: 40, lostAfter: 1400 };
 
 export class Asteroid extends Entity {
   readonly kind = "asteroid";
@@ -11,6 +14,7 @@ export class Asteroid extends Entity {
   readonly shape: readonly number[];
   hp: number;
   hunter = false;
+  entered = false;
 
   constructor({ pos, vel, radius, rng }: { pos: Vector2; vel: Vector2; radius: number; rng: Rng }) {
     super({ pos, vel, radius });
@@ -22,6 +26,43 @@ export class Asteroid extends Entity {
   override update(dt: number, world: World): void {
     super.update(dt, world);
     this.angle += this.spin * dt;
+    const { x, y } = this.pos;
+    if (!this.entered && inside(x, y, this.radius)) this.entered = true;
+    const gone = this.entered
+      ? outside(x, y, this.radius)
+      : outside(x, y, ASTEROID_FIELD.lostAfter);
+    if (!gone) return;
+    this.alive = false;
+    world.later(world.rng.range(0.5, 2.5), (w) => w.spawn(Asteroid.incoming(w.rng, ARENA)));
+  }
+
+  static incoming(rng: Rng, arena: ArenaSize, extraDistance = 0): Asteroid {
+    const radius = rng.range(20, 55);
+    const side = rng.int(0, 3);
+    const away = radius + ASTEROID_FIELD.spawnGap + extraDistance;
+    const along = rng.next();
+    const pos =
+      side === 0
+        ? new Vector2(-away, along * arena.height)
+        : side === 1
+          ? new Vector2(arena.width + away, along * arena.height)
+          : side === 2
+            ? new Vector2(along * arena.width, -away)
+            : new Vector2(along * arena.width, arena.height + away);
+    const target = new Vector2(
+      rng.range(0.15, 0.85) * arena.width,
+      rng.range(0.15, 0.85) * arena.height,
+    );
+    const sizeFactor = Math.sqrt(36 / radius);
+    const burst = rng.next() < 0.15 ? 1.8 : 1;
+    const speed = rng.range(45, 150) * sizeFactor * burst;
+    const vel = target.sub(pos).normalize().scale(speed);
+    const asteroid = new Asteroid({ pos, vel, radius, rng });
+    if (rng.next() < 0.2) {
+      asteroid.hunter = true;
+      asteroid.behaviors.push(homing({ turnRate: 0.6, range: 380 }));
+    }
+    return asteroid;
   }
 
   static random(rng: Rng, arena: ArenaSize, world: World | null = null): Asteroid {

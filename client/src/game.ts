@@ -15,13 +15,13 @@ import { createHud } from "./hud.ts";
 import type { Input } from "./input.ts";
 import type { Loop, LoopStats } from "./loop.ts";
 import { createLoop } from "./loop.ts";
+import { Camera } from "./render/camera.ts";
 import type { View } from "./render/canvas.ts";
-import { beginFrame } from "./render/canvas.ts";
 import type { Sprites } from "./render/draw.ts";
 import {
   drawAsteroid,
-  drawBackground,
   drawBullet,
+  drawCachedBackground,
   drawExplosion,
   drawHud,
   drawPickup,
@@ -62,6 +62,7 @@ export function startGame({
 } {
   const world = new World({ seed: rules.seed });
   const hud = createHud(world.events);
+  const camera = new Camera(ARENA);
 
   for (const config of rules.wells) world.spawn(GravityWell.fromConfig(config));
   const start = experiment.probe
@@ -73,7 +74,9 @@ export function startGame({
     new Ship({ pos: new Vector2(dummySpot.x, dummySpot.y), angle: 0, name: "dummy" }),
   );
   dummy.controls = { thrust: true, left: true, right: false, fire: false };
-  for (let i = 0; i < rules.asteroids; i++) world.spawn(Asteroid.random(world.rng, ARENA, world));
+  for (let i = 0; i < rules.asteroids; i++) {
+    world.spawn(Asteroid.incoming(world.rng, ARENA, world.rng.range(0, 450)));
+  }
   for (let i = 0; i < rules.pickups; i++) world.spawn(Pickup.random(world, ARENA));
 
   audio?.listen(world.events, { ownId: () => ship.id });
@@ -112,21 +115,43 @@ export function startGame({
     experiment.beforeRender(frameCount);
     const now = performance.now();
 
-    beginFrame(ctx, view);
-    drawBackground(ctx, ARENA, theme);
-    for (const w of world.ofKind("well")) drawWell(ctx, w, interpolate(w, alpha, ARENA), now);
-    for (const p of world.ofKind("pickup")) drawPickup(ctx, p, sprites);
-    for (const a of world.ofKind("asteroid")) {
-      drawAsteroid(ctx, a, interpolate(a, alpha, ARENA), sprites);
+    if (!ship.dead) {
+      const me = interpolateShip(ship, alpha);
+      camera.follow(me.x, me.y);
     }
-    for (const b of world.ofKind("bullet")) drawBullet(ctx, interpolate(b, alpha, ARENA), sprites);
+    camera.begin(ctx, view);
+    drawCachedBackground(ctx, ARENA, view, theme);
+    camera.border(ctx);
+    for (const w of world.ofKind("well")) {
+      const p = interpolate(w, alpha);
+      if (!camera.place(p.x, p.y, 520)) continue;
+      drawWell(ctx, w, p, now);
+    }
+    for (const p of world.ofKind("pickup")) {
+      if (!camera.place(p.pos.x, p.pos.y)) continue;
+      drawPickup(ctx, p, sprites);
+    }
+    for (const a of world.ofKind("asteroid")) {
+      const p = interpolate(a, alpha);
+      if (!camera.place(p.x, p.y)) continue;
+      drawAsteroid(ctx, a, p, sprites);
+    }
+    for (const b of world.ofKind("bullet")) {
+      const p = interpolate(b, alpha);
+      if (!camera.place(p.x, p.y)) continue;
+      drawBullet(ctx, p, sprites);
+    }
     for (const s of world.ofKind("ship")) {
       if (s.dead) continue;
-      const p = interpolateShip(s, alpha, ARENA);
+      const p = interpolateShip(s, alpha);
+      if (!camera.place(p.x, p.y)) continue;
       drawShip(ctx, p, now, s === ship, sprites);
       if (s.effects.has("shield")) drawShield(ctx, p);
     }
-    for (const e of world.ofKind("explosion")) drawExplosion(ctx, e);
+    for (const e of world.ofKind("explosion")) {
+      if (!camera.place(e.pos.x, e.pos.y)) continue;
+      drawExplosion(ctx, e);
+    }
     hud.drawWorld(ctx);
 
     drawHud(ctx, view, stats, [

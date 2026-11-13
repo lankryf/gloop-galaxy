@@ -43,10 +43,10 @@ describe("integrate", () => {
     expect(Math.hypot(s.vx, s.vy)).toBeLessThanOrEqual(SHIP.maxSpeed + 1e-9);
   });
 
-  test("flying off the right edge comes back on the left", () => {
-    const next = integrate(at(ARENA.width - 1, 50, 300, 0), IDLE, dt);
-    expect(next.x).toBeGreaterThanOrEqual(0);
-    expect(next.x).toBeLessThan(20);
+  test("hitting the wall stops at the edge and bounces back at half speed", () => {
+    const next = integrate(at(ARENA.width - 25, 900, 300, 0), IDLE, dt);
+    expect(next.x).toBe(ARENA.width - SHIP.radius);
+    expect(next.vx).toBeCloseTo(-300 * (1 - SHIP.drag * dt) * SHIP.wallBounce, 9);
   });
 
   test("quantizeAngle keeps angles in (-PI, PI] with 1e-4 steps", () => {
@@ -86,7 +86,7 @@ describe("Ship", () => {
 
   test("fire respects the cooldown: 0.18 s is one shot every 6 ticks", () => {
     const world = new World();
-    const ship = world.spawn(new Ship({ pos: new Vector2(800, 450), inputDriven: true }));
+    const ship = world.spawn(new Ship({ pos: new Vector2(800, 1500), inputDriven: true }));
     const fire = { ...IDLE, fire: true };
     for (let i = 1; i <= 30; i++) {
       ship.steer(fire, dt, world, seq(i));

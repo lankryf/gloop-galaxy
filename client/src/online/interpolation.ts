@@ -1,6 +1,5 @@
 import type { EntitySnap, Snapshot } from "@gloop/shared/protocol.ts";
-import { ARENA } from "@gloop/shared/sim/arena.ts";
-import { lerpAngle, lerpWrapped } from "../render/draw.ts";
+import { lerp, lerpAngle } from "../render/draw.ts";
 
 const KEEP = 30;
 const OFFSET_WINDOW = 90;
@@ -13,8 +12,8 @@ export interface Sampled {
 
 function blendInto(out: EntitySnap, prev: EntitySnap, next: EntitySnap, t: number): EntitySnap {
   Object.assign(out, next);
-  out.x = lerpWrapped(prev.x, next.x, t, ARENA.width);
-  out.y = lerpWrapped(prev.y, next.y, t, ARENA.height);
+  out.x = lerp(prev.x, next.x, t);
+  out.y = lerp(prev.y, next.y, t);
   if ("angle" in out && "angle" in prev && "angle" in next)
     out.angle = lerpAngle(prev.angle, next.angle, t);
   return out;

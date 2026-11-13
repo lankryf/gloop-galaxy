@@ -11,7 +11,7 @@ import type {
   Snapshot,
 } from "@gloop/shared/protocol.ts";
 import { assertNever, packButtons, ShipFlag, TICK_DT } from "@gloop/shared/protocol.ts";
-import { ARENA, wrap } from "@gloop/shared/sim/arena.ts";
+import { ARENA, outside } from "@gloop/shared/sim/arena.ts";
 import { BULLET } from "@gloop/shared/sim/bullet.ts";
 import { Explosion } from "@gloop/shared/sim/explosion.ts";
 import { gravityAt } from "@gloop/shared/sim/gravity.ts";
@@ -32,8 +32,8 @@ import { createLoop } from "../loop.ts";
 import type { Connection } from "../net/connection.ts";
 import type { Percentiles } from "../perf.ts";
 import { measure, measures, Samples } from "../perf.ts";
+import { Camera } from "../render/camera.ts";
 import type { View } from "../render/canvas.ts";
-import { beginFrame } from "../render/canvas.ts";
 import type { ShipPose, Sprites } from "../render/draw.ts";
 import {
   drawAsteroid,
@@ -46,19 +46,23 @@ import {
   drawShip,
   drawWell,
   hudLines,
-  lerpWrapped,
+  lerp,
 } from "../render/draw.ts";
+import { Minimap } from "../render/minimap.ts";
 import { TextPanel } from "../render/panel.ts";
 import { SnapshotBuffer } from "./interpolation.ts";
 import type { Netgraph } from "./netgraph.ts";
 import { createNetgraph } from "./netgraph.ts";
 import type { MovingWell, PendingInput } from "./prediction.ts";
-import { Predictor, toWellField } from "./prediction.ts";
+import { bodyAt, Predictor, toWellField } from "./prediction.ts";
 import { WorkerDecoder } from "./worker-decoder.ts";
 
 const REDUNDANCY = 3;
 const DRAW_ORDER: readonly EntitySnap["kind"][] = ["well", "pickup", "asteroid", "bullet", "ship"];
 const HUD_REFRESH_MS = 250;
+const WELL_MARGIN = 520;
+const PICKUP_RADIUS = 18;
+const ENTITY_MARGIN = 120;
 const isFinished = (e: { readonly alive: boolean }) => !e.alive;
 const isExpired = (e: { readonly ttl: number }) => e.ttl <= 0;
 
@@ -225,6 +229,8 @@ export function startOnlineGame({
     for (const e of snapshot.entities) {
       if (e.kind === "ship" && e.id === myShip) me = e;
       else if (e.kind === "well") wells.push(toWellField(e));
+      else if (e.kind === "asteroid") wells.push(bodyAt(e.x, e.y, e.radius));
+      else if (e.kind === "pickup") wells.push(bodyAt(e.x, e.y, PICKUP_RADIUS));
       else if (e.kind === "bullet" && e.owner === myShip) {
         shots.add(e.shot);
         seenShots.add(e.shot);
@@ -248,6 +254,8 @@ export function startOnlineGame({
 
   const workerDecoder = options.worker ? new WorkerDecoder(onSnapshot) : null;
   const directDecode = new Samples();
+  const camera = new Camera(ARENA);
+  const minimap = new Minimap(ARENA);
 
   connection.events.on("binary", (data) => {
     if (workerDecoder) {
@@ -292,8 +300,9 @@ export function startOnlineGame({
     for (const b of localBullets) {
       b.prevX = b.x;
       b.prevY = b.y;
-      b.x = wrap(b.x + b.vx * TICK_DT, ARENA.width);
-      b.y = wrap(b.y + b.vy * TICK_DT, ARENA.height);
+      b.x += b.vx * TICK_DT;
+      b.y += b.vy * TICK_DT;
+      if (outside(b.x, b.y, BULLET.radius)) b.ttl = 0;
       const { ax, ay } = gravityAt(b.x, b.y, wells);
       b.vx += ax * TICK_DT;
       b.vy += ay * TICK_DT;
@@ -375,14 +384,8 @@ export function startOnlineGame({
       return ownScratch;
     }
     const prev = predictor.previous ?? s;
-    ownScratch.x = wrap(
-      lerpWrapped(prev.x, s.x, alpha, ARENA.width) + predictor.offset.x,
-      ARENA.width,
-    );
-    ownScratch.y = wrap(
-      lerpWrapped(prev.y, s.y, alpha, ARENA.height) + predictor.offset.y,
-      ARENA.height,
-    );
+    ownScratch.x = lerp(prev.x, s.x, alpha) + predictor.offset.x;
+    ownScratch.y = lerp(prev.y, s.y, alpha) + predictor.offset.y;
     ownScratch.angle = s.angle;
     ownScratch.thrust = s.thrust;
     return ownScratch;
@@ -473,6 +476,43 @@ export function startOnlineGame({
     ]);
   }
 
+  function drawMinimap(entities: readonly EntitySnap[], pose: ShipPose | null): void {
+    minimap.begin(ctx, view);
+    for (const e of entities) {
+      switch (e.kind) {
+        case "well":
+          minimap.dot(
+            ctx,
+            e,
+            e.type === "blackhole" ? 3 : 5,
+            e.type === "blackhole" ? "#000000" : "#a868c8",
+          );
+          minimap.ring(
+            ctx,
+            e,
+            WELLS[e.type].range,
+            e.type === "blackhole" ? "rgba(199, 125, 255, 0.5)" : "rgba(168, 104, 200, 0.35)",
+          );
+          break;
+        case "asteroid":
+          minimap.dot(ctx, e, 1.5, "#8a7d99");
+          break;
+        case "pickup":
+          minimap.dot(ctx, e, 2, "#ffd84d");
+          break;
+        case "ship":
+          if (e.id !== myShip && !(e.flags & ShipFlag.dead)) minimap.dot(ctx, e, 3, "#ff9f1c");
+          break;
+        case "bullet":
+          break;
+        default:
+          assertNever(e);
+      }
+    }
+    if (pose) minimap.dot(ctx, pose, 3.5, "#8dff3a");
+    minimap.viewport(ctx, camera);
+  }
+
   function render(alpha: number, stats: LoopStats): void {
     const now = performance.now();
     const frameSeconds = (now - lastFrame) / 1000;
@@ -481,34 +521,43 @@ export function startOnlineGame({
     updateNetgraph(now);
 
     const sampled = buffer.sample(now);
-    beginFrame(ctx, view);
+    const self = me;
+    const pose = isAlive(self) ? ownPose(alpha, self) : null;
+    if (pose) camera.follow(pose.x, pose.y);
+    camera.begin(ctx, view);
     drawCachedBackground(ctx, ARENA, view, theme);
+    camera.border(ctx);
     for (const kind of DRAW_ORDER) {
-      for (const e of sampled.entities) if (e.kind === kind) drawEntity(e, now);
+      const margin = kind === "well" ? WELL_MARGIN : ENTITY_MARGIN;
+      for (const e of sampled.entities) {
+        if (e.kind !== kind || !camera.place(e.x, e.y, margin)) continue;
+        drawEntity(e, now);
+      }
     }
     for (const b of localBullets) {
-      bulletScratch.x = lerpWrapped(b.prevX, b.x, alpha, ARENA.width);
-      bulletScratch.y = lerpWrapped(b.prevY, b.y, alpha, ARENA.height);
+      bulletScratch.x = lerp(b.prevX, b.x, alpha);
+      bulletScratch.y = lerp(b.prevY, b.y, alpha);
       bulletScratch.angle = Math.atan2(b.vy, b.vx);
+      if (!camera.place(bulletScratch.x, bulletScratch.y)) continue;
       drawBullet(ctx, bulletScratch, sprites);
     }
 
-    const self = me;
-    if (isAlive(self)) {
-      const p = ownPose(alpha, self);
-      drawShip(ctx, p, now, true, sprites);
-      if (self.flags & ShipFlag.shield) drawShield(ctx, p);
-      drawName(ctx, names.get(myShip) ?? "ти", p.x, p.y, true);
+    if (isAlive(self) && pose) {
+      drawShip(ctx, pose, now, true, sprites);
+      if (self.flags & ShipFlag.shield) drawShield(ctx, pose);
+      drawName(ctx, names.get(myShip) ?? "ти", pose.x, pose.y, true);
     }
 
     for (const e of explosions) {
       e.update(frameSeconds);
+      if (!camera.place(e.pos.x, e.pos.y)) continue;
       drawExplosion(ctx, e);
     }
     removeWhere(explosions, isFinished, releaseExplosion);
     ctx.textAlign = "center";
     for (const p of popups) {
       p.ttl -= frameSeconds;
+      if (!camera.place(p.x, p.y)) continue;
       ctx.globalAlpha = Math.max(0, Math.min(1, p.ttl * 2));
       ctx.font = "bold 26px sans-serif";
       ctx.lineWidth = 5;
@@ -529,6 +578,7 @@ export function startOnlineGame({
     ctx.fillStyle = "rgba(20, 8, 36, 0.7)";
     ctx.fillRect(10, 10, hud.style.width, hud.height + 10);
     hud.draw(ctx, 10, 10);
+    drawMinimap(sampled.entities, pose);
     if (options.netgraph) netgraph.draw(ctx, view);
   }
 

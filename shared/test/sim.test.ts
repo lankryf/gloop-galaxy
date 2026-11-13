@@ -70,15 +70,16 @@ test("a black hole swallows a ship that sits still next to it", () => {
   assert.ok(ship.dead || ship.deaths === 1);
 });
 
-test("ships wrap around the arena", () => {
+test("ships bounce off the arena wall", () => {
   const world = new World();
-  const ship = world.spawn(new Ship({ pos: new Vector2(ARENA.width - 1, 100), angle: 0 }));
+  const ship = world.spawn(new Ship({ pos: new Vector2(ARENA.width - 30, 100), angle: 0 }));
   ship.vel = new Vector2(400, 0);
   ship.controls = { ...ship.controls, thrust: true };
   world.step(1 / 30);
-  assert.ok(ship.pos.x < 50);
+  assert.ok(ship.pos.x <= ARENA.width - 22);
+  assert.ok(ship.vel.x < 0);
 });
 
 test("scenario hash matches the value computed in Chrome", () => {
-  assert.equal(hashWorld(runScenario({ steps: 1000 })), "192f27b8");
+  assert.equal(hashWorld(runScenario({ steps: 1000 })), "31aaac49");
 });

@@ -137,7 +137,7 @@ export class Match {
     this.world = new World({ seed: arena.seed });
     for (const config of arena.wells) this.world.spawn(GravityWell.fromConfig(config));
     for (let i = 0; i < arena.asteroids; i++)
-      this.world.spawn(Asteroid.random(this.world.rng, ARENA, this.world));
+      this.world.spawn(Asteroid.incoming(this.world.rng, ARENA, this.world.rng.range(0, 450)));
     for (let i = 0; i < arena.pickups; i++) this.world.spawn(Pickup.random(this.world, ARENA));
     const spot = this.world.findSafeSpot(40, ARENA);
     const dummy = this.world.spawn(

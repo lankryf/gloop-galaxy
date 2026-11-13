@@ -2,7 +2,6 @@ import type { Seq } from "@gloop/shared/ids.ts";
 import { seq } from "@gloop/shared/ids.ts";
 import type { InputRecord } from "@gloop/shared/protocol.ts";
 import { packButtons } from "@gloop/shared/protocol.ts";
-import { ARENA } from "@gloop/shared/sim/arena.ts";
 import type { Rng } from "@gloop/shared/sim/random.ts";
 import { createRng } from "@gloop/shared/sim/random.ts";
 import type { Controls, Ship } from "@gloop/shared/sim/ship.ts";
@@ -17,16 +16,9 @@ export interface Target {
   readonly distance: number;
 }
 
-function delta(a: number, b: number, size: number): number {
-  let d = b - a;
-  if (d > size / 2) d -= size;
-  if (d < -size / 2) d += size;
-  return d;
-}
-
 export function toward(ship: Ship, x: number, y: number): Target {
-  const dx = delta(ship.pos.x, x, ARENA.width);
-  const dy = delta(ship.pos.y, y, ARENA.height);
+  const dx = x - ship.pos.x;
+  const dy = y - ship.pos.y;
   return { dx, dy, distance: Math.hypot(dx, dy) };
 }
 

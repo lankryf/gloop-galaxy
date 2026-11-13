@@ -67,6 +67,15 @@ export class GravityWell extends Entity {
     };
   }
 
+  bounceOffWalls(arena: ArenaSize = ARENA): void {
+    const margin = this.radius * 2;
+    let { x: vx, y: vy } = this.vel;
+    const { x, y } = this.pos;
+    if ((x < margin && vx < 0) || (x > arena.width - margin && vx > 0)) vx = -vx;
+    if ((y < margin && vy < 0) || (y > arena.height - margin && vy > 0)) vy = -vy;
+    if (vx !== this.vel.x || vy !== this.vel.y) this.vel = new Vector2(vx, vy);
+  }
+
   get timeLeft(): number {
     return this.life - this.age;
   }
@@ -74,6 +83,7 @@ export class GravityWell extends Entity {
   override update(dt: number, world: World): void {
     super.update(dt, world);
     this.angle += this.spin * dt;
+    this.bounceOffWalls();
     this.age += dt;
     if (this.age < this.life) return;
     this.alive = false;

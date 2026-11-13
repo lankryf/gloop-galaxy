@@ -1,5 +1,6 @@
 import type { EntityId, Seq } from "../ids.ts";
 import { seq } from "../ids.ts";
+import { outside } from "./arena.ts";
 import { Entity } from "./entity.ts";
 import type { Vector2 } from "./vector.ts";
 import type { World } from "./world.ts";
@@ -27,6 +28,6 @@ export class Bullet extends Entity {
   override update(dt: number, world: World): void {
     super.update(dt, world);
     this.ttl -= dt;
-    if (this.ttl <= 0) this.alive = false;
+    if (this.ttl <= 0 || outside(this.pos.x, this.pos.y, this.radius)) this.alive = false;
   }
 }

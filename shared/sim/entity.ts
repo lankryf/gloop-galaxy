@@ -1,5 +1,4 @@
 import type { EntityId } from "../ids.ts";
-import { ARENA, wrap } from "./arena.ts";
 import type { AnyEntity, EntityKind } from "./kinds.ts";
 import { Vector2 } from "./vector.ts";
 import type { World } from "./world.ts";
@@ -61,8 +60,7 @@ export abstract class Entity {
   }
 
   update(dt: number, _world: World): void {
-    const next = this.pos.add(this.vel.scale(dt));
-    this.pos = new Vector2(wrap(next.x, ARENA.width), wrap(next.y, ARENA.height));
+    this.pos = this.pos.add(this.vel.scale(dt));
   }
 
   settle(): void {}

@@ -1,7 +1,6 @@
 import { ARENAS, isArenaName } from "@gloop/shared/arenas.ts";
 import type { RoomInfo, ServerMessageOf } from "@gloop/shared/protocol.ts";
 import { FATAL_CLOSE_CODES } from "@gloop/shared/protocol.ts";
-import { ARENA } from "@gloop/shared/sim/arena.ts";
 import type { Assets, Progress } from "./assets/loader.ts";
 import { buildJobs, emptyAssets, loadAll, loadJson } from "./assets/loader.ts";
 import type { Manifest, Theme } from "./assets/manifest.ts";
@@ -23,6 +22,7 @@ import { mountLobby } from "./lobby/view.ts";
 import { Connection, socketUrl } from "./net/connection.ts";
 import type { OnlineGame } from "./online/game.ts";
 import { startOnlineGame } from "./online/game.ts";
+import { VIEWPORT } from "./render/camera.ts";
 import { setupCanvas } from "./render/canvas.ts";
 import type { SpriteSheet } from "./render/draw.ts";
 import { drawLoading } from "./screens/loading.ts";
@@ -42,7 +42,7 @@ interface Session {
 
 const canvas = must(document, "#game", HTMLCanvasElement);
 const overlay = must(document, "#overlay", HTMLDivElement);
-const { ctx, view } = setupCanvas(canvas, ARENA);
+const { ctx, view } = setupCanvas(canvas, VIEWPORT);
 const input = createInput(window);
 const audio = createAudio();
 let lastProgress: Progress = { done: 0, total: 0, status: [] };

@@ -29,7 +29,7 @@ export function runScenario({
   const world = new World({ seed });
   world.spawn(GravityWell.fromConfig({ type: "blackhole", x: 0.66, y: 0.62, drift: [-14, 9] }));
   world.spawn(GravityWell.fromConfig({ type: "planet", x: 0.3, y: 0.38 }));
-  for (let i = 0; i < 8; i++) world.spawn(Asteroid.random(world.rng, ARENA, world));
+  for (let i = 0; i < 8; i++) world.spawn(Asteroid.incoming(world.rng, ARENA, i * 60));
   const ships = [0, 1, 2].map(() => {
     const spot = world.findSafeSpot(40, ARENA);
     return world.spawn(new Ship({ pos: new Vector2(spot.x, spot.y), inputDriven: true }));

@@ -2,7 +2,7 @@ import { entityId, seq, tick } from "@gloop/shared/ids.ts";
 import type { Snapshot } from "@gloop/shared/protocol.ts";
 import { describe, expect, test } from "vitest";
 import { SnapshotBuffer } from "../src/online/interpolation.ts";
-import { lerpAngle, lerpWrapped } from "../src/render/draw.ts";
+import { lerp, lerpAngle } from "../src/render/draw.ts";
 
 const snap = (t: number, x: number): Snapshot => ({
   tick: tick(t),
@@ -44,8 +44,8 @@ describe("SnapshotBuffer", () => {
 });
 
 describe("lerp helpers", () => {
-  test("lerpWrapped takes the short way across the edge", () => {
-    expect(lerpWrapped(1590, 10, 0.5, 1600)).toBeCloseTo(0, 9);
+  test("lerp works outside the arena too", () => {
+    expect(lerp(-200, -100, 0.5)).toBe(-150);
   });
 
   test("lerpAngle takes the short way across PI", () => {

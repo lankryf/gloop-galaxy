@@ -54,7 +54,7 @@ function asteroidBullet(world: World, asteroid: Asteroid, bullet: Bullet): void 
   asteroid.alive = false;
   credit(world, bullet.ownerId, SCORE.asteroid, asteroid.pos);
   explode(world, asteroid.pos, asteroid.radius / 35, "#b49ad1");
-  world.spawn(Asteroid.random(world.rng, ARENA, world));
+  world.later(world.rng.range(0.5, 2), (w) => w.spawn(Asteroid.incoming(w.rng, ARENA)));
 }
 
 function bulletShip(world: World, bullet: Bullet, ship: Ship): void {
@@ -113,7 +113,7 @@ function asteroidWell(world: World, asteroid: Asteroid, well: GravityWell): void
   }
   asteroid.alive = false;
   world.emit("swallowed", { x: well.pos.x, y: well.pos.y, kind: "asteroid" });
-  world.later(2, (w) => w.spawn(Asteroid.random(w.rng, ARENA, w)));
+  world.later(2, (w) => w.spawn(Asteroid.incoming(w.rng, ARENA)));
 }
 
 function shipWell(world: World, ship: Ship, well: GravityWell): void {
