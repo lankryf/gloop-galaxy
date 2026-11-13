@@ -413,6 +413,37 @@ export function drawScores(ctx: Ctx, view: View, rows: readonly ScoreRow[]): num
   return 10 + height;
 }
 
+export function rayToEdge(x: number, y: number, angle: number, arena: ArenaSize): number {
+  const dx = Math.cos(angle);
+  const dy = Math.sin(angle);
+  const tx = dx > 0 ? (arena.width - x) / dx : dx < 0 ? -x / dx : Number.POSITIVE_INFINITY;
+  const ty = dy > 0 ? (arena.height - y) / dy : dy < 0 ? -y / dy : Number.POSITIVE_INFINITY;
+  return Math.max(0, Math.min(tx, ty));
+}
+
+export function drawCourse(
+  ctx: Ctx,
+  x: number,
+  y: number,
+  angle: number,
+  arena: ArenaSize,
+  time: number,
+  alpha = 0.6,
+): void {
+  const length = rayToEdge(x, y, angle, arena);
+  if (length <= 0) return;
+  ctx.save();
+  ctx.strokeStyle = `rgba(255, 210, 63, ${alpha})`;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([14, 12]);
+  ctx.lineDashOffset = -time / 25;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }

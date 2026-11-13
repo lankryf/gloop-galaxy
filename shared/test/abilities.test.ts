@@ -105,10 +105,38 @@ describe("abilities", () => {
     );
     ship.applyPickup("nuke");
     press(world, ship);
-    for (let t = 0; t < MISSILE.nuke.ttl + 0.2; t += dt) world.step(dt);
+    for (let t = 0; t < 3; t += dt) world.step(dt);
     expect(rock.alive).toBe(false);
     expect(ship.dead).toBe(false);
     expect([...world.ofKind("missile")].length).toBe(0);
+  });
+
+  test("nuke flies on until it hits something", () => {
+    const world = new World();
+    const blasts: number[] = [];
+    world.events.on("exploded", (e) => blasts.push(e.size));
+    const nuke = world.spawn(
+      new Missile({
+        pos: new Vector2(200, 900),
+        vel: new Vector2(MISSILE.nuke.speed, 0),
+        type: "nuke",
+        ownerId: entityId(999),
+      }),
+    );
+    world.spawn(
+      new Asteroid({
+        pos: new Vector2(4000, 900),
+        vel: new Vector2(),
+        radius: 30,
+        rng: createRng(3),
+      }),
+    );
+    for (let t = 0; t < 5; t += dt) world.step(dt);
+    expect(nuke.alive).toBe(true);
+    expect(blasts).toEqual([]);
+    for (let t = 0; t < 6; t += dt) world.step(dt);
+    expect(nuke.alive).toBe(false);
+    expect(blasts.some((size) => size >= 5)).toBe(true);
   });
 
   test("homing missile turns toward an enemy ship ahead", () => {

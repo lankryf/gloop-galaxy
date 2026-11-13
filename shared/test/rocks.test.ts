@@ -140,13 +140,13 @@ describe("asteroids and planets", () => {
     const planet = world.spawn(GravityWell.planet({ x: 0.5, y: 0.5 }));
     const m = world.spawn(
       new Missile({
-        pos: planet.pos.add(new Vector2(-planet.radius - 40, 0)),
-        vel: new Vector2(),
+        pos: planet.pos.add(new Vector2(-planet.radius - 200, 0)),
+        vel: new Vector2(MISSILE.nuke.speed, 0),
         type: "nuke",
         ownerId: entityId(999),
       }),
     );
-    for (let t = 0; t < MISSILE.nuke.ttl + 0.1; t += dt) world.step(dt);
+    for (let t = 0; t < 2; t += dt) world.step(dt);
     expect(m.alive).toBe(false);
     expect(planet.alive).toBe(false);
     expect(count(world, "asteroid")).toBeGreaterThanOrEqual(4);

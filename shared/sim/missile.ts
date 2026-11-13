@@ -21,9 +21,9 @@ export const MISSILE = {
     cone: 0.6,
   },
   nuke: {
-    speed: 300,
+    speed: 380,
     turnRate: 0,
-    ttl: 1.6,
+    ttl: Number.POSITIVE_INFINITY,
     radius: 16,
     blast: 460,
     damage: 130,

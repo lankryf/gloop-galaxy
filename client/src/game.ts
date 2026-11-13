@@ -29,6 +29,7 @@ import {
   drawAsteroid,
   drawBullet,
   drawCachedBackground,
+  drawCourse,
   drawDust,
   drawExplosion,
   drawHud,
@@ -172,6 +173,11 @@ export function startGame({
       if (!camera.place(p.x, p.y)) continue;
       drawBullet(ctx, p, sprites, b.ownerId === ship.id);
     }
+    for (const m of world.ofKind("missile")) {
+      if (m.type === "nuke") drawCourse(ctx, m.pos.x, m.pos.y, m.vel.angle(), ARENA, now);
+    }
+    if (!ship.dead && ship.ability === "nuke")
+      drawCourse(ctx, ship.pos.x, ship.pos.y, ship.angle, ARENA, now, 0.25);
     for (const m of world.ofKind("missile")) {
       const p = interpolate(m, alpha);
       if (!camera.place(p.x, p.y)) continue;

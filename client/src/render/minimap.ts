@@ -86,6 +86,22 @@ export class Minimap {
     ctx.restore();
   }
 
+  course(ctx: CanvasRenderingContext2D, from: MinimapDot, to: MinimapDot, color: string): void {
+    const { width, height } = MINIMAP;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(this.left, this.top, width, height);
+    ctx.clip();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(this.left + from.x * this.#sx, this.top + from.y * this.#sy);
+    ctx.lineTo(this.left + to.x * this.#sx, this.top + to.y * this.#sy);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   viewport(ctx: CanvasRenderingContext2D, camera: Camera): void {
     const { width, height } = MINIMAP;
     const w = camera.halfW * 2 * this.#sx;

@@ -40,6 +40,7 @@ import {
   drawAsteroid,
   drawBullet,
   drawCachedBackground,
+  drawCourse,
   drawDust,
   drawExplosion,
   drawMissile,
@@ -54,6 +55,7 @@ import {
   drawWell,
   hudLines,
   lerp,
+  rayToEdge,
   shipFrame,
 } from "../render/draw.ts";
 import { Minimap } from "../render/minimap.ts";
@@ -624,6 +626,16 @@ export function startOnlineGame({
           break;
         case "missile":
           minimap.dot(ctx, e, e.type === "nuke" ? 3 : 2, "#ff4f4f");
+          if (e.type === "nuke") {
+            const angle = Math.atan2(e.vy, e.vx);
+            const length = rayToEdge(e.x, e.y, angle, ARENA);
+            minimap.course(
+              ctx,
+              e,
+              { x: e.x + Math.cos(angle) * length, y: e.y + Math.sin(angle) * length },
+              "rgba(255, 210, 63, 0.8)",
+            );
+          }
           break;
         case "bullet":
         case "dust":
@@ -662,6 +674,12 @@ export function startOnlineGame({
     camera.begin(ctx, view);
     drawCachedBackground(ctx, ARENA, view, theme, sprites, camera);
     camera.border(ctx);
+    for (const e of sampled.entities) {
+      if (e.kind === "missile" && e.type === "nuke")
+        drawCourse(ctx, e.x, e.y, Math.atan2(e.vy, e.vx), ARENA, now);
+    }
+    if (pose && self?.ability === "nuke")
+      drawCourse(ctx, pose.x, pose.y, pose.angle, ARENA, now, 0.25);
     for (const kind of DRAW_ORDER) {
       const margin = kind === "well" ? WELL_MARGIN : ENTITY_MARGIN;
       for (const e of sampled.entities) {
