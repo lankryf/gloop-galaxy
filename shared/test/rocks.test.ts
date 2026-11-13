@@ -100,12 +100,15 @@ describe("heat", () => {
     for (let i = 0; i < 30 * 3; i++) world.step(dt);
     expect(ship.vel.length()).toBeGreaterThan(SHIP.maxSpeed * 1.2);
     expect(ship.vel.length()).toBeLessThanOrEqual(SHIP.maxSpeed * BOOST.maxSpeed + 1e-6);
-    expect(ship.heat).toBeLessThan(1);
+    expect(ship.heat).toBeCloseTo(BOOST.heat * 3, 4);
 
-    ship.heat = 50;
+    ship.controls = IDLE;
     world.step(dt);
-    expect(ship.heat).toBeCloseTo(50 + (BOOST.heat - HEAT.cooling) * dt, 6);
+    expect(ship.heat).toBeCloseTo(BOOST.heat * 3 - HEAT.cooling * dt, 4);
+    ship.controls = { ...IDLE, boost: true };
 
+    for (let i = 0; i < 30 * 8; i++) world.step(dt);
+    expect(ship.overheated).toBe(true);
     ship.controls = IDLE;
     for (let i = 0; i < 30 * 2; i++) world.step(dt);
     expect(ship.vel.length()).toBeLessThanOrEqual(SHIP.maxSpeed + 1e-6);

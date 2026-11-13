@@ -318,10 +318,12 @@ export class Ship extends Entity {
     this.thrust = next.thrust;
 
     this.cooldown = Math.max(0, this.cooldown - dt);
-    const cooling = this.overheated ? HEAT.overheatedCooling : HEAT.cooling;
-    this.heat = Math.max(0, this.heat - cooling * dt);
-    if (this.overheated && this.heat <= HEAT.resumeAt) this.overheated = false;
     if (controls.boost) this.addHeat(BOOST.heat * dt);
+    else {
+      const cooling = this.overheated ? HEAT.overheatedCooling : HEAT.cooling;
+      this.heat = Math.max(0, this.heat - cooling * dt);
+    }
+    if (this.overheated && this.heat <= HEAT.resumeAt) this.overheated = false;
     if (controls.fire && this.cooldown === 0 && !this.overheated) this.fire(world, shot);
     const use = controls.use === true;
     this.beaming = false;
