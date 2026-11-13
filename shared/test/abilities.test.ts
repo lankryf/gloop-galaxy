@@ -7,6 +7,7 @@ import { Pickup } from "../sim/pickup.ts";
 import { createRng } from "../sim/random.ts";
 import { BEAM_CHARGE, IDLE, Ship, WARP_DELAY, WARP_DISTANCE } from "../sim/ship.ts";
 import { Vector2 } from "../sim/vector.ts";
+import { GravityWell } from "../sim/well.ts";
 import { World } from "../sim/world.ts";
 
 const dt = 1 / 30;
@@ -134,6 +135,22 @@ describe("abilities", () => {
     expect(rock.alive).toBe(false);
     expect(ship.dead).toBe(false);
     expect([...world.ofKind("missile")].length).toBe(0);
+  });
+
+  test("gravity does not bend a nuke", () => {
+    const world = new World();
+    world.spawn(new GravityWell({ type: "blackhole", pos: new Vector2(1500, 1100) }));
+    const nuke = world.spawn(
+      new Missile({
+        pos: new Vector2(800, 900),
+        vel: new Vector2(MISSILE.nuke.speed, 0),
+        type: "nuke",
+        ownerId: entityId(999),
+      }),
+    );
+    for (let i = 0; i < 30; i++) world.step(dt);
+    expect(nuke.vel.y).toBe(0);
+    expect(nuke.pos.y).toBe(900);
   });
 
   test("nuke flies on until it hits something", () => {

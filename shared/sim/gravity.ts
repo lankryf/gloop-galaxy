@@ -95,6 +95,7 @@ export function applyGravity(world: World, dt: number): void {
     if (!entity.alive) continue;
     if (entity.kind !== "asteroid" && entity.kind !== "missile" && entity.kind !== "bullet")
       continue;
+    if (entity.kind === "missile" && entity.type === "nuke") continue;
     const { ax, ay } = gravityAt(entity.pos.x, entity.pos.y, natural);
     if (ax !== 0 || ay !== 0) {
       entity.vel = entity.vel.add({ x: ax * dt, y: ay * dt });
