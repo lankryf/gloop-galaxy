@@ -27,6 +27,7 @@ import { setupCanvas } from "./render/canvas.ts";
 import type { SpriteSheet } from "./render/draw.ts";
 import { drawLoading } from "./screens/loading.ts";
 import { mountChat } from "./ui/chat.ts";
+import { mountDebugToggle } from "./ui/debug.ts";
 import { must } from "./ui/dom.ts";
 
 declare global {
@@ -43,6 +44,7 @@ interface Session {
 const canvas = must(document, "#game", HTMLCanvasElement);
 const overlay = must(document, "#overlay", HTMLDivElement);
 const { ctx, view } = setupCanvas(canvas, VIEWPORT);
+mountDebugToggle(document.body);
 const input = createInput(window);
 const audio = createAudio();
 let lastProgress: Progress = { done: 0, total: 0, status: [] };

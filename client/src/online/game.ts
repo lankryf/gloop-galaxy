@@ -35,7 +35,7 @@ import { measure, measures, Samples } from "../perf.ts";
 import { Blast, drawBlast, drawWarpCharge } from "../render/blast.ts";
 import { Camera } from "../render/camera.ts";
 import type { View } from "../render/canvas.ts";
-import type { ShipPose, Sprites, Status } from "../render/draw.ts";
+import type { ScoreRow, ShipPose, Sprites, Status } from "../render/draw.ts";
 import {
   drawAsteroid,
   drawBullet,
@@ -46,6 +46,7 @@ import {
   drawName,
   drawPickup,
   drawPull,
+  drawScores,
   drawShield,
   drawShip,
   drawShipHp,
@@ -57,6 +58,7 @@ import {
 } from "../render/draw.ts";
 import { Minimap } from "../render/minimap.ts";
 import { TextPanel } from "../render/panel.ts";
+import { debug } from "../ui/debug.ts";
 import { SnapshotBuffer } from "./interpolation.ts";
 import type { Netgraph } from "./netgraph.ts";
 import { createNetgraph } from "./netgraph.ts";
@@ -100,6 +102,12 @@ function statusOf(ship: ShipSnap): Status {
     heat: ship.heat,
     overheated: (ship.flags & ShipFlag.overheated) !== 0,
     cooling: ship.cooling,
+    effects: [
+      ship.flags & ShipFlag.shield ? "щит" : "",
+      ship.flags & ShipFlag.rapid ? "швидкий вогонь" : "",
+    ]
+      .filter(Boolean)
+      .join(" · "),
     ...skillOf(ship),
   };
 }
@@ -555,28 +563,36 @@ export function startOnlineGame({
   });
   let hudAt = Number.NEGATIVE_INFINITY;
 
-  function buildHud(entities: readonly EntitySnap[], stats: LoopStats): string[] {
-    const self = me;
-    const effects: string[] = [];
-    if (self && self.flags & ShipFlag.shield) effects.push("щит");
-    if (self && self.flags & ShipFlag.rapid) effects.push("вогонь");
-    if (self && self.flags & ShipFlag.pull) effects.push("притягування");
-    const scores = entities
-      .filter((e) => e.kind === "ship")
-      .filter((e) => !(e.flags & ShipFlag.bot))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5)
-      .map((e) => `${(names.get(e.id) ?? "?").padEnd(10).slice(0, 10)} ${e.score}`);
-    const respawn =
-      self && self.flags & ShipFlag.dead ? `respawn  ${(self.respawn / 10).toFixed(1)} s` : "";
+  function buildHud(stats: LoopStats): string[] {
     return hudLines(stats, [
       `build    ${__APP_VERSION__} ${__COMMIT__}`,
       `tick     ${buffer.latest?.tick ?? 0}`,
-      `effects  ${effects.join(", ") || "-"}`,
-      respawn,
-      "",
-      ...scores,
+      `entities ${buffer.latest?.entities.length ?? 0}`,
     ]);
+  }
+
+  function scoreRows(entities: readonly EntitySnap[]): ScoreRow[] {
+    const rows: ScoreRow[] = [];
+    for (const e of entities) {
+      if (e.kind !== "ship") continue;
+      const name = names.get(e.id);
+      if (!name) continue;
+      rows.push({ name, score: e.score, own: e.id === myShip });
+    }
+    return rows.sort((a, b) => b.score - a.score).slice(0, 8);
+  }
+
+  function drawRespawn(ship: ShipSnap): void {
+    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+    ctx.textAlign = "center";
+    ctx.font = "bold 28px sans-serif";
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#1a0b26";
+    ctx.fillStyle = "#ff7ad9";
+    const text = `Повернення через ${(ship.respawn / 10).toFixed(1)} с`;
+    ctx.strokeText(text, view.width / 2, view.height / 2 - 60);
+    ctx.fillText(text, view.width / 2, view.height / 2 - 60);
+    ctx.textAlign = "start";
   }
 
   function drawMinimap(entities: readonly EntitySnap[], pose: ShipPose | null): void {
@@ -696,17 +712,21 @@ export function startOnlineGame({
     ctx.textAlign = "start";
     removeWhere(popups, isExpired);
 
-    if (now - hudAt >= HUD_REFRESH_MS) {
-      hud.update(buildHud(sampled.entities, stats), view.dpr);
-      hudAt = now;
+    const scoresBottom = drawScores(ctx, view, scoreRows(sampled.entities));
+    if (debug.on) {
+      if (now - hudAt >= HUD_REFRESH_MS) {
+        hud.update(buildHud(stats), view.dpr);
+        hudAt = now;
+      }
+      const top = scoresBottom + 10;
+      ctx.fillStyle = "rgba(20, 8, 36, 0.7)";
+      ctx.fillRect(10, top, hud.style.width, hud.height + 10);
+      hud.draw(ctx, 10, top);
+      if (options.netgraph) netgraph.draw(ctx, view);
     }
-    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-    ctx.fillStyle = "rgba(20, 8, 36, 0.7)";
-    ctx.fillRect(10, 10, hud.style.width, hud.height + 10);
-    hud.draw(ctx, 10, 10);
     drawMinimap(sampled.entities, pose);
     if (isAlive(self)) drawStatus(ctx, view, statusOf(self), now);
-    if (options.netgraph) netgraph.draw(ctx, view);
+    else if (self) drawRespawn(self);
   }
 
   const pinger = window.setInterval(() => connection.send("ping", { t: performance.now() }), 1000);
@@ -723,9 +743,6 @@ export function startOnlineGame({
         buffer.delayMs = Math.max(0, buffer.delayMs - 16);
       } else if (e.code === "BracketRight") {
         buffer.delayMs = Math.min(500, buffer.delayMs + 16);
-      } else if (e.code === "F3") {
-        e.preventDefault();
-        options.netgraph = !options.netgraph;
       }
     },
     { signal: listeners.signal },

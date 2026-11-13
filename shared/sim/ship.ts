@@ -193,6 +193,7 @@ export class Ship extends Entity {
     this.dead = true;
     this.collidable = false;
     this.effects.clear();
+    this.score = 0;
     this.beaming = false;
     this.warpIn = 0;
     this.heat = 0;

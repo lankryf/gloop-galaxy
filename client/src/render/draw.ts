@@ -337,12 +337,13 @@ export interface Status {
   readonly cooling: boolean;
   readonly skill: string;
   readonly skillFraction: number;
+  readonly effects: string;
 }
 
 export function drawStatus(ctx: Ctx, view: View, s: Status, time: number): void {
   const w = 224;
   const h = 10;
-  const x = Math.round((view.width - w) / 2);
+  const x = Math.round(view.width - w - 12);
   let y = Math.round(view.height - 126 - 14 - 3 * (h + 16));
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   ctx.font = "bold 11px ui-monospace, Menlo, monospace";
@@ -353,6 +354,12 @@ export function drawStatus(ctx: Ctx, view: View, s: Status, time: number): void 
     ctx.fillText(text, x + 2, y - 3);
   };
 
+  if (s.effects) {
+    ctx.fillStyle = "#ffd84d";
+    ctx.textAlign = "right";
+    ctx.fillText(s.effects, x + w, y - 3);
+    ctx.textAlign = "start";
+  }
   label(`HP ${Math.ceil(s.hp)}`);
   drawBar(ctx, x, y, w, h, Math.min(1, s.hp / s.maxHp), hpColor(s.hp / s.maxHp));
   if (s.hp > s.maxHp) {
@@ -375,6 +382,35 @@ export function drawStatus(ctx: Ctx, view: View, s: Status, time: number): void 
 
   label(s.skill);
   drawBar(ctx, x, y, w, h, s.skillFraction, "#4fa8ff");
+}
+
+export interface ScoreRow {
+  readonly name: string;
+  readonly score: number;
+  readonly own: boolean;
+}
+
+export function drawScores(ctx: Ctx, view: View, rows: readonly ScoreRow[]): number {
+  const lineHeight = 20;
+  const width = 200;
+  const height = 34 + rows.length * lineHeight;
+  ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+  ctx.fillStyle = "rgba(20, 8, 36, 0.7)";
+  ctx.fillRect(10, 10, width, height);
+  ctx.font = "bold 13px sans-serif";
+  ctx.fillStyle = "#b49ad1";
+  ctx.fillText("ОЧКИ", 20, 30);
+  ctx.font = "14px sans-serif";
+  rows.forEach((row, i) => {
+    const y = 52 + i * lineHeight;
+    ctx.fillStyle = row.own ? GOO : "#f4e9ff";
+    ctx.textAlign = "start";
+    ctx.fillText(`${i + 1}. ${row.name}`.slice(0, 20), 20, y);
+    ctx.textAlign = "right";
+    ctx.fillText(String(row.score), width, y);
+  });
+  ctx.textAlign = "start";
+  return 10 + height;
 }
 
 export function lerp(a: number, b: number, t: number): number {

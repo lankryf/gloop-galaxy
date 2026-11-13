@@ -90,7 +90,7 @@ export function createNetgraph(): Netgraph {
       }
       const h = panel.height + 66;
       const x = view.width - w - 10;
-      const y = view.height - h - 10;
+      const y = 10;
       ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
       ctx.fillStyle = "rgba(20, 8, 36, 0.78)";
       ctx.fillRect(x, y, w, h);

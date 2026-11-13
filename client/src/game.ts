@@ -44,6 +44,7 @@ import {
   interpolateShip,
   shipFrame,
 } from "./render/draw.ts";
+import { debug } from "./ui/debug.ts";
 
 export interface OfflineOptions {
   readonly ctx: CanvasRenderingContext2D;
@@ -213,24 +214,25 @@ export function startGame({
     blasts = blasts.filter((b) => !b.done);
     hud.drawWorld(ctx);
 
-    drawHud(ctx, view, stats, [
-      `jitter   ${stats.jitter.toFixed(2)} ms`,
-      `entities ${world.size}`,
-      `pilot    ${ship.name}`,
-      `score    ${ship.score}`,
-      `effects  ${[...ship.effects.keys()].join(", ") || "-"}`,
-      `skill    ${
-        ship.warpIn > 0
-          ? `warp ${ship.warpIn.toFixed(1)}s`
-          : ship.ability === "gravity"
-            ? `beam ${ship.charge.toFixed(1)}s [hold E]`
-            : ship.ability
-              ? `${ship.ability} [E]`
-              : "-"
-      }`,
-      `hp       ${ship.hp}${ship.dead ? ` (respawn ${ship.respawnIn.toFixed(1)}s)` : ""}`,
-      experiment.name ? `exp      ${experiment.name}` : "",
-    ]);
+    if (debug.on)
+      drawHud(ctx, view, stats, [
+        `jitter   ${stats.jitter.toFixed(2)} ms`,
+        `entities ${world.size}`,
+        `pilot    ${ship.name}`,
+        `score    ${ship.score}`,
+        `effects  ${[...ship.effects.keys()].join(", ") || "-"}`,
+        `skill    ${
+          ship.warpIn > 0
+            ? `warp ${ship.warpIn.toFixed(1)}s`
+            : ship.ability === "gravity"
+              ? `beam ${ship.charge.toFixed(1)}s [hold E]`
+              : ship.ability
+                ? `${ship.ability} [E]`
+                : "-"
+        }`,
+        `hp       ${ship.hp}${ship.dead ? ` (respawn ${ship.respawnIn.toFixed(1)}s)` : ""}`,
+        experiment.name ? `exp      ${experiment.name}` : "",
+      ]);
     hud.drawScreen(ctx, view);
     if (!ship.dead) {
       drawStatus(
@@ -243,6 +245,7 @@ export function startGame({
           heat: ship.heat,
           overheated: ship.overheated,
           cooling: ship.coolFor > 0,
+          effects: [...ship.effects.keys()].map((e) => PICKUP_NAMES[e].toLowerCase()).join(" · "),
           skill:
             ship.warpIn > 0
               ? `ВАРП через ${ship.warpIn.toFixed(1)} с`

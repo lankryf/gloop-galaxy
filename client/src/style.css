@@ -214,10 +214,6 @@ body {
   line-height: 1.5;
 }
 
-.roster:empty {
-  display: none;
-}
-
 .create-room {
   display: flex;
   gap: 6px;
@@ -237,4 +233,41 @@ body {
   padding: 4px 8px;
   width: auto;
   font-size: 14px;
+}
+
+.roster {
+  display: none;
+}
+
+body.debug .roster:not(:empty) {
+  display: block;
+  right: 300px;
+}
+
+.debug-toggle {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+  font:
+    12px ui-monospace,
+    Menlo,
+    monospace;
+  letter-spacing: 2px;
+  padding: 10px 4px;
+  border: 2px solid #1a0b26;
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  background: rgba(20, 8, 36, 0.75);
+  color: #b49ad1;
+  cursor: pointer;
+  opacity: 0.6;
+  z-index: 5;
+}
+
+.debug-toggle:hover,
+.debug-toggle[aria-pressed="true"] {
+  opacity: 1;
+  color: #8dff3a;
 }

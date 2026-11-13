@@ -22,7 +22,7 @@ export class Minimap {
 
   begin(ctx: CanvasRenderingContext2D, view: View): void {
     const { width, height, margin } = MINIMAP;
-    this.left = Math.round((view.width - width) / 2);
+    this.left = Math.round(view.width - width - margin);
     this.top = Math.round(view.height - height - margin);
     this.#sx = width / this.arena.width;
     this.#sy = height / this.arena.height;

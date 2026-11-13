@@ -60,6 +60,15 @@ describe("iron dust", () => {
   });
 });
 
+describe("score", () => {
+  test("is lost when the ship dies", () => {
+    const ship = new Ship({ pos: new Vector2() });
+    ship.score = 340;
+    ship.kill();
+    expect(ship.score).toBe(0);
+  });
+});
+
 describe("heat", () => {
   test("long fire overheats the gun, then it cools down", () => {
     const world = new World();
