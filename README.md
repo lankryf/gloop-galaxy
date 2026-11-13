@@ -837,10 +837,7 @@ $${\color{red}\text{СКРІНШОТ 2: те саме для docs/perf/client-af
 | `SHUTDOWN_TIMEOUT_MS`    | 8000          | після цього вихід примусово |
 | `LOG_LEVEL`              | info          | рівень pino |
 
-**Graceful shutdown.** `SIGTERM` → `/ready` стає 503, `server.close()` перестає приймати нові з'єднання, усім гравцям іде `shutdown` і close `1001`, сервер чекає закриття сокетів (не довше половини `SHUTDOWN_TIMEOUT_MS`), дописує логи матчів і виходить з кодом 0. З гравцями в кімнаті від сигналу до `bye` в лозі пройшло 9 мс, процес завершився за 1.3 с. Таймер на 8 с гарантує вихід, навіть якщо щось зависне, – Docker і Fly дають 10 с до `SIGKILL`. Тест `server/test/ops.test.ts` перевіряє `shutdown` + `1001` і те, що нові з'єднання після сигналу відхиляються.
-
-$${\color{red}\text{ПЕРЕВІРИТИ В DOCKER: docker compose up --build, відкрити гру, потім docker compose stop gloop;}}$$
-$${\color{red}\text{у docker compose logs має бути "shutting down" і "bye" з ms, а docker compose ps -a показати Exited (0). Скріншот → docs/img/lab08-docker-stop.png}}$$
+**Graceful shutdown.** `SIGTERM` → `/ready` стає 503, `server.close()` перестає приймати нові з'єднання, усім гравцям іде `shutdown` і close `1001`, сервер чекає закриття сокетів (не довше половини `SHUTDOWN_TIMEOUT_MS`), дописує логи матчів і виходить з кодом 0. З гравцями в кімнаті від сигналу до `bye` в лозі пройшло 9 мс, процес завершився за 1.3 с. Таймер на 8 с гарантує вихід, навіть якщо щось зависне, – Docker і Fly дають 10 с до `SIGKILL`. Тест `server/test/ops.test.ts` перевіряє `shutdown` + `1001` і те, що нові з'єднання після сигналу відхиляються. У контейнері: `docker compose stop` з чотирма гравцями в кімнаті зайняв 268 мс, усі чотири вийшли з кодом 1001, у лозі «bye» через 12 мс після сигналу, контейнер – `Exited (0)`.
 
 ### Захист і chaos-тести
 
@@ -865,12 +862,39 @@ $${\color{red}\text{у docker compose logs має бути "shutting down" і "b
 
 ### Контейнер
 
-`Dockerfile` з трьох стадій: `build` (повний `npm ci` і збирання клієнта), `deps` (`npm ci --omit=dev`), `runtime` на `node:22-alpine` – тільки продакшн-залежності (`ws`, `zod`, `pino`, `prom-client`), `shared/`, `server/src` і зібраний клієнт, без тестів і скриптів (`.dockerignore`). Сервер запускається напряму з TypeScript (`node src/index.ts`, Node сам вирізає типи), тож окремої компіляції немає. Користувач `node`, exec-форма `CMD`, `STOPSIGNAL SIGTERM`, `HEALTHCHECK` через `fetch` до `/health` (у образі немає `curl`). Розкладку runtime-стадії перевірив локально: застосунок разом з `node_modules` важить 17 МБ, сервер стартує з неї і віддає `/health` з версією з build-args.
+`Dockerfile` з трьох стадій: `build` (повний `npm ci` і збирання клієнта), `deps` (`npm ci --omit=dev`), `runtime` на `node:22-alpine` – тільки продакшн-залежності (`ws`, `zod`, `pino`, `prom-client`), `shared/`, `server/src` і зібраний клієнт, без тестів і скриптів (`.dockerignore`). Сервер запускається напряму з TypeScript (`node src/index.ts`, Node сам вирізає типи), тож окремої компіляції немає. Користувач `node`, exec-форма `CMD`, `STOPSIGNAL SIGTERM`, `HEALTHCHECK` через `fetch` до `/health` (у образі немає `curl`). Шари застосунку над базовим образом – 17.4 МБ (`docker history`: `node_modules` 16.4 МБ, зібраний клієнт 0.5 МБ, код сервера і `shared` 0.3 МБ).
 
-`compose.yaml` – локальний запуск як у продакшні (`docker compose up --build`) і профіль `staging` на порту 8081 з високими лімітами для навантажувального скрипта: `docker compose --profile staging up staging`, потім `TARGET=http://localhost:8081 node server/scripts/loadtest.ts 64,256 20`.
+`compose.yaml` – локальний запуск як у продакшні і профіль `staging` для навантажувального тесту:
 
-$${\color{red}\text{ЗАПИСАТИ РОЗМІР ОБРАЗУ: docker build -t gloop-galaxy . і docker images gloop-galaxy — вписати сюди число (має бути менше 200 МБ;}}$$
-$${\color{red}\text{очікується близько 175 МБ: node:22-alpine ~160 МБ + 17 МБ застосунку). У GitHub Actions розмір також пишеться в summary кроку Image size}}$$
+```bash
+docker compose up --build -d          # гра на http://localhost:8080
+docker compose ps                     # STATUS: Up (healthy)
+docker compose logs -f gloop          # JSON-логи pino
+docker compose stop gloop             # graceful shutdown, Exited (0)
+
+docker compose --profile staging up -d staging
+TARGET=http://localhost:8081 node server/scripts/loadtest.ts 64,256 12
+```
+
+Перевірка образу через compose:
+
+| Що перевіряв | Результат |
+| ------------ | --------- |
+| стан після старту | `Up (healthy)` через ~15 с, `HEALTHCHECK` проходить |
+| користувач у контейнері | `uid=1000(node)` |
+| `/health` | `{"status":"ok","version":"v1.0.0","commit":"7478c27",...}` – версія і коміт з build-args |
+| гра в браузері на :8080 | лобі, кімната з 4 ботами, у HUD рядок `build v1.0.0 7478c27` |
+| 12 з'єднань з однієї IP при ліміті 8 | 8 відкрито, 4 отримали 429, `gloop_rejections_total{reason="ip_limit"} 4` |
+| чужий `Origin` | 403, `reason="origin"` 1 |
+| `docker compose stop` з 4 гравцями | 268 мс, усім 1001, `Exited (0)` |
+| staging, 64 і 256 клієнтів | тік p99 0.9 і 1.1 мс, інтервал 33.34 мс, ELU 0.14 і 0.39, RSS 133 і 143 МБ, 0 відмов |
+
+![docker compose](docs/img/lab08-compose.png)
+
+Образ для цієї перевірки я збирав з `--build-arg NODE_IMAGE=...` на локально зібраній базі з тим самим Node 22.23 (Docker Hub з моєї машини був недоступний), тому загальний розмір у мене не показовий: база на glibc важить 339 МБ. На `node:22-alpine` (близько 160 МБ) образ має вийти приблизно 178 МБ.
+
+$${\color{red}\text{ЗАПИСАТИ РОЗМІР ОБРАЗУ: docker compose build, потім docker images gloop-galaxy — вписати сюди число (має бути менше 200 МБ).}}$$
+$${\color{red}\text{У GitHub Actions розмір також пишеться в summary кроку Image size}}$$
 
 ### Деплой
 

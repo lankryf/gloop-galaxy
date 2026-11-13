@@ -438,7 +438,7 @@ export function startOnlineGame({
   }
 
   const hud = new TextPanel({
-    width: 190,
+    width: 220,
     lineHeight: 18,
     font: "14px ui-monospace, Menlo, monospace",
     color: "#8dff3a",

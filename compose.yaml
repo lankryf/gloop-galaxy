@@ -3,6 +3,7 @@ services:
     build:
       context: .
       args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
         GIT_SHA: ${GIT_SHA:-local}
         APP_VERSION: ${APP_VERSION:-local}
     image: gloop-galaxy:local
