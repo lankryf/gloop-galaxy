@@ -79,14 +79,6 @@
       }
     }
   },
-  "sounds": {
-    "shoot": "/assets/sounds/shoot.wav",
-    "hit": "/assets/sounds/hit.wav",
-    "explosion": "/assets/sounds/explosion.wav",
-    "pickup": "/assets/sounds/pickup.wav",
-    "ability": "/assets/sounds/ability.wav",
-    "lose": "/assets/sounds/lose.wav"
-  },
   "arenas": {
     "nebula": "/assets/arenas/nebula.json",
     "junkyard": "/assets/arenas/junkyard.json"

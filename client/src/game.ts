@@ -14,7 +14,6 @@ import {
 import { Vector2 } from "@gloop/shared/sim/vector.ts";
 import { World } from "@gloop/shared/sim/world.ts";
 import type { Theme } from "./assets/manifest.ts";
-import type { Audio } from "./audio.ts";
 import type { GameExperiment } from "./experiments.ts";
 import type { Hud } from "./hud.ts";
 import { createHud, PICKUP_NAMES } from "./hud.ts";
@@ -53,7 +52,6 @@ export interface OfflineOptions {
   readonly ctx: CanvasRenderingContext2D;
   readonly view: View;
   readonly input: Input;
-  readonly audio: Audio | null;
   readonly sprites: Sprites;
   readonly theme: Theme;
   readonly rules: ArenaRules;
@@ -65,7 +63,6 @@ export function startGame({
   ctx,
   view,
   input,
-  audio,
   sprites,
   theme,
   rules,
@@ -92,8 +89,6 @@ export function startGame({
   );
   dummy.controls = { thrust: true, left: true, right: false, fire: false };
 
-  audio?.listen(world.events, { ownId: () => ship.id });
-
   let simTime = 0;
   let frameCount = 0;
   let reported = false;
@@ -110,7 +105,6 @@ export function startGame({
     });
   }
 
-  let wasDead = false;
   let blasts: Blast[] = [];
   let lastFrame = performance.now();
   world.events.on("exploded", ({ x, y, size }) => {
@@ -126,8 +120,6 @@ export function startGame({
   function simulate(dt: number): void {
     ship.controls = readControls();
     world.step(dt);
-    if (ship.dead && !wasDead) audio?.play("lose", { volume: 0.8 });
-    wasDead = ship.dead;
     hud.update(dt);
     simTime += dt;
     input.endStep();

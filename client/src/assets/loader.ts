@@ -1,6 +1,4 @@
 import type { z } from "zod";
-import type { SoundName } from "../audio.ts";
-import { isSoundName } from "../audio.ts";
 import type { Manifest, Theme } from "./manifest.ts";
 import { ThemeSchema } from "./manifest.ts";
 import { HttpError, messageOf, withRetry } from "./retry.ts";
@@ -23,7 +21,6 @@ export interface Progress {
 
 export interface Assets {
   readonly sprites: Record<string, ImageBitmap>;
-  readonly sounds: Partial<Record<SoundName, AudioBuffer>>;
   readonly arenas: Record<string, Theme>;
   readonly failures: { name: string; error: string }[];
 }
@@ -92,29 +89,11 @@ export function loadImage(url: string, signal: AbortSignal): Promise<ImageBitmap
   );
 }
 
-export function loadAudio(
-  audioContext: BaseAudioContext,
-  url: string,
-  signal: AbortSignal,
-): Promise<AudioBuffer> {
-  return withRetry(
-    async () => {
-      const response = await fetchOk(url, signal);
-      return audioContext.decodeAudioData(await response.arrayBuffer());
-    },
-    { signal, onRetry: logRetry(url) },
-  );
-}
-
 export function emptyAssets(): Assets {
-  return { sprites: {}, sounds: {}, arenas: {}, failures: [] };
+  return { sprites: {}, arenas: {}, failures: [] };
 }
 
-export function buildJobs(
-  manifest: Manifest,
-  audioContext: BaseAudioContext,
-  assets: Assets,
-): Job[] {
+export function buildJobs(manifest: Manifest, assets: Assets): Job[] {
   const jobs: Job[] = [];
   for (const [name, sheet] of Object.entries(manifest.sprites)) {
     jobs.push({
@@ -122,16 +101,6 @@ export function buildJobs(
       required: false,
       load: async (signal) => {
         assets.sprites[name] = await loadImage(sheet.url, signal);
-      },
-    });
-  }
-  for (const [name, url] of Object.entries(manifest.sounds)) {
-    if (!isSoundName(name)) continue;
-    jobs.push({
-      name: `sounds/${name}`,
-      required: false,
-      load: async (signal) => {
-        assets.sounds[name] = await loadAudio(audioContext, url, signal);
       },
     });
   }

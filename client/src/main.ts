@@ -6,7 +6,6 @@ import { buildJobs, emptyAssets, loadAll, loadJson } from "./assets/loader.ts";
 import type { Manifest, Theme } from "./assets/manifest.ts";
 import { ManifestSchema } from "./assets/manifest.ts";
 import { messageOf } from "./assets/retry.ts";
-import { createAudio } from "./audio.ts";
 import {
   applyFailMode,
   failMode,
@@ -47,7 +46,6 @@ const overlay = must(document, "#overlay", HTMLDivElement);
 const { ctx, view } = setupCanvas(canvas, VIEWPORT);
 mountDebugToggle(document.body);
 const input = createInput(window);
-const audio = createAudio();
 let lastProgress: Progress = { done: 0, total: 0, status: [] };
 
 const cancelled = () => new DOMException("Cancelled by player", "AbortError");
@@ -78,7 +76,7 @@ async function loadAssets(manifest: Manifest): Promise<Assets> {
   if (failMode === "abort") setTimeout(() => controller.abort(cancelled()), 700);
 
   const assets = emptyAssets();
-  const jobs = buildJobs(manifest, audio.context, assets);
+  const jobs = buildJobs(manifest, assets);
   const started = performance.now();
   try {
     return await loadAll(jobs, assets, {
@@ -188,7 +186,6 @@ async function enterRoom(
 
 async function boot(): Promise<void> {
   const { manifest, assets } = await loadWithRetry();
-  audio.setBuffers(assets.sounds);
   if (assets.failures.length > 0) {
     drawLoading(ctx, view, lastProgress, "Частина файлів не завантажилась");
     await waitForClick("Грати без них");
@@ -205,7 +202,6 @@ async function boot(): Promise<void> {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const { room, name, session } = await enterRoom(notice);
-    await audio.unlock().catch(() => {});
     const arena = isArenaName(room.arena) ? room.arena : "nebula";
     const theme = assets.arenas[arena] ?? Object.values(assets.arenas)[0];
     if (!theme) throw new Error("no arena themes loaded");
@@ -216,7 +212,6 @@ async function boot(): Promise<void> {
         ctx,
         view,
         input,
-        audio,
         sprites,
         theme,
         rules: ARENAS[arena],
@@ -249,7 +244,6 @@ function playOnline(
     ctx,
     view,
     input,
-    audio,
     sprites,
     theme,
     connection,

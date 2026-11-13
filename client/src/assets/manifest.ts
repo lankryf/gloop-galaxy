@@ -9,7 +9,6 @@ export const ManifestSchema = z.object({
     z.string(),
     z.object({ url: z.string(), frames: z.record(z.string(), FrameSchema) }),
   ),
-  sounds: z.record(z.string(), z.string()),
   arenas: z.record(z.string(), z.string()),
 });
 export type Manifest = z.infer<typeof ManifestSchema>;

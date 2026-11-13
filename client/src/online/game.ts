@@ -24,7 +24,6 @@ import { Vector2 } from "@gloop/shared/sim/vector.ts";
 import { WELLS } from "@gloop/shared/sim/well.ts";
 import type { Theme } from "../assets/manifest.ts";
 import { messageOf } from "../assets/retry.ts";
-import type { Audio } from "../audio.ts";
 import type { NetOptions } from "../experiments.ts";
 import { PICKUP_NAMES } from "../hud.ts";
 import type { Input } from "../input.ts";
@@ -142,7 +141,6 @@ export interface OnlineOptions {
   readonly ctx: CanvasRenderingContext2D;
   readonly view: View;
   readonly input: Input;
-  readonly audio: Audio | null;
   readonly sprites: Sprites;
   readonly theme: Theme;
   readonly connection: Connection;
@@ -168,7 +166,6 @@ export function startOnlineGame({
   ctx,
   view,
   input,
-  audio,
   sprites,
   theme,
   connection,
@@ -201,7 +198,6 @@ export function startOnlineGame({
   let me: ShipSnap | null = null;
   let wells: MovingWell[] = [];
   let cooldown = 0;
-  let wasDead = false;
   const localBullets: LocalBullet[] = [];
   const bulletPool = new Pool<LocalBullet>(
     () => ({ shot: toSeq(0), x: 0, y: 0, vx: 0, vy: 0, ttl: 0, prevX: 0, prevY: 0 }),
@@ -254,38 +250,28 @@ export function startOnlineGame({
   function handleEvent(ev: NetEvent): void {
     switch (ev.type) {
       case "fired":
-        if (ev.shipId !== myShip || !options.prediction) {
-          audio?.play("shoot", { volume: ev.shipId === myShip ? 0.5 : 0.2 });
-        }
-        return;
       case "hit":
-        audio?.play("hit", { volume: 0.6 });
         return;
       case "exploded":
         if (ev.size >= 5) {
           blasts.push(new Blast(ev.x, ev.y, MISSILE.nuke.blast, "nuke", Math.random));
-          audio?.play("explosion", { volume: 1, rate: 0.6 });
           return;
         }
         explosions.push(
           explosionPool.acquire().reset({ pos: new Vector2(ev.x, ev.y), rng, size: ev.size }),
         );
-        audio?.play("explosion", { volume: Math.min(1, 0.4 + ev.size * 0.3) });
         return;
       case "scored":
         if (ev.shipId === myShip) popup(`+${ev.points}`, ev.x, ev.y, 1);
         return;
       case "pickup":
-        audio?.play("pickup", { volume: 0.7 });
         if (ev.shipId === myShip) popup(PICKUP_NAMES[ev.pickup], ev.x, ev.y);
         return;
       case "swallowed":
-        if (ev.what !== "bullet") audio?.play("explosion", { volume: 0.9, rate: 0.45 });
         if (ev.shipId === myShip && ev.what === "ship") popup("НЯМ!", ev.x, ev.y);
         return;
       case "collapsed":
         blasts.push(new Blast(ev.x, ev.y, ev.range, "collapse", Math.random));
-        audio?.play("explosion", { volume: 1, rate: 0.3 });
         return;
       case "formed":
         explosions.push(
@@ -297,15 +283,11 @@ export function startOnlineGame({
           }),
         );
         popup("НОВА ПЛАНЕТА!", ev.x, ev.y, 2);
-        audio?.play("explosion", { volume: 0.8, rate: 0.5 });
         return;
       case "warped":
         blasts.push(new Blast(ev.x, ev.y, 140, ev.arrive ? "warpIn" : "warpOut", Math.random));
-        if (ev.arrive)
-          audio?.play("ability", { volume: ev.shipId === myShip ? 0.7 : 0.3, rate: 1.5 });
         return;
       case "ability":
-        audio?.play("ability", { volume: ev.shipId === myShip ? 0.8 : 0.4 });
         if (ev.shipId === myShip) popup(PICKUP_NAMES[ev.ability], ev.x, ev.y);
         return;
       default:
@@ -332,9 +314,6 @@ export function startOnlineGame({
       }
     }
 
-    const dead = me !== null && (me.flags & ShipFlag.dead) !== 0;
-    if (dead && !wasDead) audio?.play("lose", { volume: 0.8 });
-    wasDead = dead;
     if (!isAlive(me)) {
       predictor.reset();
       clearBullets();
@@ -391,7 +370,6 @@ export function startOnlineGame({
     b.vy = state.vy + vel.y;
     b.ttl = BULLET.ttl;
     localBullets.push(b);
-    audio?.play("shoot", { volume: 0.5, rate: 0.95 + Math.random() * 0.1 });
   }
 
   function stepLocalBullets(): void {

@@ -84,7 +84,6 @@ export function applyFailMode(manifest: Manifest): Manifest {
   const m: Manifest = {
     ...manifest,
     sprites,
-    sounds: mapValues(manifest.sounds, delay),
     arenas: mapValues(manifest.arenas, delay),
   };
 
@@ -94,8 +93,8 @@ export function applyFailMode(manifest: Manifest): Manifest {
   if (failMode === "timeout" && asteroids) asteroids.url = withQuery(asteroids.url, "delay=12000");
   if (failMode === "json" && m.arenas.junkyard)
     m.arenas.junkyard = withQuery(m.arenas.junkyard, "corrupt");
-  if (failMode === "flaky" && m.sounds.shoot)
-    m.sounds.shoot = withQuery(m.sounds.shoot, `flaky=${Date.now()}`);
+  if (failMode === "flaky" && m.sprites.planets)
+    m.sprites.planets.url = withQuery(m.sprites.planets.url, `flaky=${Date.now()}`);
   if (failMode === "abort") {
     for (const sheet of Object.values(m.sprites)) sheet.url = withQuery(sheet.url, "delay=3000");
   }
