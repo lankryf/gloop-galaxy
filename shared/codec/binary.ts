@@ -2,8 +2,10 @@ import type { EntityId, Seq, Tick } from "../ids.ts";
 import { isEntityId, isSeq, isTick } from "../ids.ts";
 import type { EntitySnap, InputRecord, NetEvent, Snapshot } from "../protocol.ts";
 import { assertNever, BINARY_VERSION, MAX_BUTTONS } from "../protocol.ts";
-import type { PickupType } from "../sim/pickup.ts";
-import { PICKUP_TYPES } from "../sim/pickup.ts";
+import type { MissileType } from "../sim/missile.ts";
+import { MISSILE_TYPES } from "../sim/missile.ts";
+import type { AbilityType, PickupType } from "../sim/pickup.ts";
+import { ABILITY_TYPES, PICKUP_TYPES } from "../sim/pickup.ts";
 import type { WellType } from "../sim/well.ts";
 import { WELL_TYPES } from "../sim/well.ts";
 
@@ -15,6 +17,7 @@ const KIND_CODE: Readonly<Record<EntitySnap["kind"], number>> = {
   asteroid: 3,
   pickup: 4,
   well: 5,
+  missile: 6,
 };
 const EVENT_CODE: Readonly<Record<NetEvent["type"], number>> = {
   fired: 1,
@@ -24,6 +27,7 @@ const EVENT_CODE: Readonly<Record<NetEvent["type"], number>> = {
   pickup: 5,
   swallowed: 6,
   collapsed: 7,
+  ability: 8,
 };
 const SWALLOWED: readonly ["bullet", "asteroid", "ship"] = ["bullet", "asteroid", "ship"];
 const ANGLE_SCALE = 10000;
@@ -31,11 +35,12 @@ const HEADER = 12;
 const COMMON = 11;
 const EVENT_SIZE = 12;
 const SIZE: Readonly<Record<EntitySnap["kind"], number>> = {
-  ship: COMMON + 15,
+  ship: COMMON + 16,
   bullet: COMMON + 14,
   asteroid: COMMON + 4,
   pickup: COMMON + 1,
   well: COMMON + 13,
+  missile: COMMON + 11,
 };
 export const ACK_OFFSET = 6;
 
@@ -87,6 +92,22 @@ function readTick(view: DataView, offset: number): Tick {
 function pickupAt(index: number): PickupType {
   const type = PICKUP_TYPES[index];
   if (type === undefined) throw new CodecError(`bad pickup type ${index}`);
+  return type;
+}
+
+function abilityAt(index: number): AbilityType {
+  const type = ABILITY_TYPES[index];
+  if (type === undefined) throw new CodecError(`bad ability ${index}`);
+  return type;
+}
+
+function abilityOrNull(code: number): AbilityType | null {
+  return code === 0 ? null : abilityAt(code - 1);
+}
+
+function missileAt(index: number): MissileType {
+  const type = MISSILE_TYPES[index];
+  if (type === undefined) throw new CodecError(`bad missile type ${index}`);
   return type;
 }
 
@@ -150,6 +171,13 @@ function writeEntity(view: DataView, o: number, e: EntitySnap): number {
       view.setUint8(p + 11, e.flags);
       view.setUint16(p + 12, e.score, true);
       view.setUint8(p + 14, e.respawn);
+      view.setUint8(p + 15, e.ability === null ? 0 : ABILITY_TYPES.indexOf(e.ability) + 1);
+      break;
+    case "missile":
+      view.setFloat32(p, e.vx, true);
+      view.setFloat32(p + 4, e.vy, true);
+      view.setUint16(p + 8, e.owner, true);
+      view.setUint8(p + 10, MISSILE_TYPES.indexOf(e.type));
       break;
     case "bullet":
       view.setFloat32(p, e.vx, true);
@@ -194,6 +222,8 @@ function eventFields(ev: NetEvent): [number, number] {
       return [ev.shipId ?? 0, SWALLOWED.indexOf(ev.what)];
     case "collapsed":
       return [0, 0];
+    case "ability":
+      return [ev.shipId, ABILITY_TYPES.indexOf(ev.ability)];
     default:
       return assertNever(ev);
   }
@@ -240,6 +270,8 @@ function kindAt(code: number): EntitySnap["kind"] {
       return "pickup";
     case 5:
       return "well";
+    case 6:
+      return "missile";
     default:
       throw new CodecError(`unknown kind ${code}`);
   }
@@ -266,6 +298,18 @@ function readEntity(view: DataView, o: number): EntitySnap {
         flags: view.getUint8(p + 11),
         score: view.getUint16(p + 12, true),
         respawn: view.getUint8(p + 14),
+        ability: abilityOrNull(view.getUint8(p + 15)),
+      };
+    case "missile":
+      return {
+        kind,
+        id,
+        x,
+        y,
+        vx: view.getFloat32(p, true),
+        vy: view.getFloat32(p + 4, true),
+        owner: readId(view, p + 8),
+        type: missileAt(view.getUint8(p + 10)),
       };
     case "bullet":
       return {
@@ -333,6 +377,8 @@ function readEvent(view: DataView, o: number): NetEvent {
       return { type: "swallowed", x, y, what: swallowedAt(b), shipId: readOptionalId(view, o + 9) };
     case EVENT_CODE.collapsed:
       return { type: "collapsed", x, y };
+    case EVENT_CODE.ability:
+      return { type: "ability", x, y, shipId: readId(view, o + 9), ability: abilityAt(b) };
     default:
       throw new CodecError(`unknown event ${code}`);
   }

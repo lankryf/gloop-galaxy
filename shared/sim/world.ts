@@ -8,13 +8,19 @@ import { hypot } from "./fmath.ts";
 import { applyGravity } from "./gravity.ts";
 import type { AnyEntity, EntityKind, OfKind } from "./kinds.ts";
 import { isKind } from "./kinds.ts";
-import type { PickupType } from "./pickup.ts";
+import type { AbilityType, PickupType } from "./pickup.ts";
 import type { Rng } from "./random.ts";
 import { createRng } from "./random.ts";
 import { resolveCollisions } from "./rules.ts";
 import type { Point } from "./vector.ts";
 
 export type WorldEvents = {
+  ability: {
+    readonly shipId: EntityId;
+    readonly ability: AbilityType;
+    readonly x: number;
+    readonly y: number;
+  };
   fired: { readonly shipId: EntityId; readonly x: number; readonly y: number };
   hit: {
     readonly x: number;

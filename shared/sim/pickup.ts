@@ -3,13 +3,43 @@ import { Entity } from "./entity.ts";
 import { Vector2 } from "./vector.ts";
 import type { World } from "./world.ts";
 
-export const PICKUP_TYPES: readonly ["shield", "rapid", "homing"] = ["shield", "rapid", "homing"];
+export const EFFECT_TYPES: readonly ["shield", "rapid", "homing", "pull"] = [
+  "shield",
+  "rapid",
+  "homing",
+  "pull",
+];
+export type EffectType = (typeof EFFECT_TYPES)[number];
+
+export const ABILITY_TYPES: readonly ["missile", "nuke", "gravity", "warp"] = [
+  "missile",
+  "nuke",
+  "gravity",
+  "warp",
+];
+export type AbilityType = (typeof ABILITY_TYPES)[number];
+
+export const PICKUP_TYPES: readonly [
+  "shield",
+  "rapid",
+  "homing",
+  "missile",
+  "nuke",
+  "gravity",
+  "warp",
+] = ["shield", "rapid", "homing", "missile", "nuke", "gravity", "warp"];
 export type PickupType = (typeof PICKUP_TYPES)[number];
-export const EFFECT_DURATION: Readonly<Record<PickupType, number>> = {
+
+export const EFFECT_DURATION: Readonly<Record<EffectType, number>> = {
   shield: 6,
   rapid: 8,
   homing: 8,
+  pull: 5,
 };
+
+export function isAbility(type: PickupType): type is AbilityType {
+  return type === "missile" || type === "nuke" || type === "gravity" || type === "warp";
+}
 
 export class Pickup extends Entity {
   readonly kind = "pickup";
@@ -21,8 +51,12 @@ export class Pickup extends Entity {
     this.type = type;
   }
 
-  override update(dt: number): void {
+  override update(dt: number, world: World): void {
     this.age += dt;
+    if (this.vel.x === 0 && this.vel.y === 0) return;
+    super.update(dt, world);
+    this.vel = this.vel.scale(Math.max(0, 1 - 1.5 * dt));
+    if (Math.abs(this.vel.x) + Math.abs(this.vel.y) < 1) this.vel = new Vector2();
   }
 
   static random(world: World, arena: ArenaSize): Pickup {

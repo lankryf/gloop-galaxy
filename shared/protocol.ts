@@ -3,14 +3,15 @@ import type { EntityId, Seq, Tick } from "./ids.ts";
 import { isEntityId, isSeq, isTick } from "./ids.ts";
 import type { Result } from "./result.ts";
 import { fail, ok } from "./result.ts";
+import { MISSILE_TYPES } from "./sim/missile.ts";
 import type { PickupType } from "./sim/pickup.ts";
-import { PICKUP_TYPES } from "./sim/pickup.ts";
+import { ABILITY_TYPES, PICKUP_TYPES } from "./sim/pickup.ts";
 import type { Controls } from "./sim/ship.ts";
 import type { WellType } from "./sim/well.ts";
 import { WELL_TYPES } from "./sim/well.ts";
 
 export const PROTOCOL_VERSION = 0;
-export const BINARY_VERSION = 1;
+export const BINARY_VERSION = 2;
 export const TICK_RATE = 30;
 export const TICK_DT = 1 / TICK_RATE;
 export const MAX_MESSAGE_BYTES = 2048;
@@ -33,9 +34,9 @@ export const FATAL_CLOSE_CODES: ReadonlySet<number> = new Set([
   CloseCode.noRoom,
 ]);
 
-export const ShipFlag = { thrust: 1, dead: 2, shield: 4, rapid: 8, homing: 16, bot: 32 };
+export const ShipFlag = { thrust: 1, dead: 2, shield: 4, rapid: 8, homing: 16, bot: 32, pull: 64 };
 
-const BUTTONS: readonly (keyof Controls)[] = ["thrust", "left", "right", "fire"];
+const BUTTONS: readonly (keyof Controls)[] = ["thrust", "left", "right", "fire", "use"];
 export const MAX_BUTTONS = (1 << BUTTONS.length) - 1;
 
 export function packButtons(input: Controls): number {
@@ -52,6 +53,7 @@ export function unpackButtons(bits: number): Controls {
     left: (bits & 2) !== 0,
     right: (bits & 4) !== 0,
     fire: (bits & 8) !== 0,
+    use: (bits & 16) !== 0,
   };
 }
 
@@ -62,6 +64,7 @@ export const EntityIdSchema = z.custom<EntityId>(
 export const SeqSchema = z.custom<Seq>((v) => typeof v === "number" && isSeq(v), "bad seq");
 export const TickSchema = z.custom<Tick>((v) => typeof v === "number" && isTick(v), "bad tick");
 const PickupTypeSchema = z.enum(PICKUP_TYPES);
+const AbilityTypeSchema = z.enum(ABILITY_TYPES);
 const WellTypeSchema = z.enum(WELL_TYPES);
 const Num = z.number().refine(Number.isFinite, "must be finite");
 
@@ -112,6 +115,7 @@ const ShipSnapSchema = z.object({
   flags: z.number().int().min(0).max(255),
   score: z.number().int().min(0).max(0xffff),
   respawn: z.number().int().min(0).max(255),
+  ability: AbilityTypeSchema.nullable(),
 });
 const BulletSnapSchema = z.object({
   kind: z.literal("bullet"),
@@ -131,6 +135,16 @@ const AsteroidSnapSchema = z.object({
   angle: Num,
   radius: z.number().int().min(0).max(255),
   hunter: z.boolean(),
+});
+const MissileSnapSchema = z.object({
+  kind: z.literal("missile"),
+  id: EntityIdSchema,
+  x: Num,
+  y: Num,
+  vx: Num,
+  vy: Num,
+  owner: EntityIdSchema,
+  type: z.enum(MISSILE_TYPES),
 });
 const PickupSnapSchema = z.object({
   kind: z.literal("pickup"),
@@ -156,6 +170,7 @@ export const EntitySnapSchema = z.discriminatedUnion("kind", [
   AsteroidSnapSchema,
   PickupSnapSchema,
   WellSnapSchema,
+  MissileSnapSchema,
 ]);
 export type EntitySnap = z.infer<typeof EntitySnapSchema>;
 export type ShipSnap = z.infer<typeof ShipSnapSchema>;
@@ -185,6 +200,12 @@ export const NetEventSchema = z.discriminatedUnion("type", [
     shipId: EntityIdSchema.nullable(),
   }),
   z.object({ type: z.literal("collapsed"), ...at }),
+  z.object({
+    type: z.literal("ability"),
+    ...at,
+    shipId: EntityIdSchema,
+    ability: AbilityTypeSchema,
+  }),
 ]);
 export type NetEvent = z.infer<typeof NetEventSchema>;
 

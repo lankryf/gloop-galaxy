@@ -12,7 +12,8 @@ import { entityId, seq, tick } from "../ids.ts";
 import type { ClientMessage, EntitySnap, NetEvent, Snapshot } from "../protocol.ts";
 import { MAX_BUTTONS, PROTOCOL_VERSION, parseClientMessage } from "../protocol.ts";
 import { ARENA, wrap } from "../sim/arena.ts";
-import { PICKUP_TYPES } from "../sim/pickup.ts";
+import { MISSILE_TYPES } from "../sim/missile.ts";
+import { ABILITY_TYPES, PICKUP_TYPES } from "../sim/pickup.ts";
 import { Ship } from "../sim/ship.ts";
 import { Vector2 } from "../sim/vector.ts";
 import { GravityWell, WELL_TYPES } from "../sim/well.ts";
@@ -34,9 +35,20 @@ const entity: fc.Arbitrary<EntitySnap> = fc.oneof(
     vy: speed,
     angle,
     hp: fc.integer({ min: 0, max: 255 }),
-    flags: fc.integer({ min: 0, max: 63 }),
+    flags: fc.integer({ min: 0, max: 127 }),
     score: fc.integer({ min: 0, max: 0xffff }),
     respawn: fc.integer({ min: 0, max: 255 }),
+    ability: fc.option(fc.constantFrom(...ABILITY_TYPES), { nil: null }),
+  }),
+  fc.record({
+    kind: fc.constant("missile" as const),
+    id,
+    x: coord,
+    y: coord,
+    vx: speed,
+    vy: speed,
+    owner: id,
+    type: fc.constantFrom(...MISSILE_TYPES),
   }),
   fc.record({
     kind: fc.constant("bullet" as const),
@@ -115,6 +127,13 @@ const event: fc.Arbitrary<NetEvent> = fc.oneof(
     shipId: shipRef,
   }),
   fc.record({ type: fc.constant("collapsed" as const), x: coord, y: coord }),
+  fc.record({
+    type: fc.constant("ability" as const),
+    x: coord,
+    y: coord,
+    shipId: id,
+    ability: fc.constantFrom(...ABILITY_TYPES),
+  }),
 );
 
 const snapshot: fc.Arbitrary<Snapshot> = fc.record({
@@ -125,11 +144,12 @@ const snapshot: fc.Arbitrary<Snapshot> = fc.record({
 });
 
 const SIZE: Record<EntitySnap["kind"], number> = {
-  ship: 26,
+  ship: 27,
   bullet: 25,
   asteroid: 15,
   pickup: 12,
   well: 24,
+  missile: 22,
 };
 const close = (a: number, b: number, eps: number) =>
   Math.abs(a - b) <= eps * Math.max(1, Math.abs(b));

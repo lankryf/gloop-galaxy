@@ -74,16 +74,23 @@ export function decide(world: World, ship: Ship, rng: Rng): Controls {
   const threat = danger(world, ship);
   if (threat) {
     const away = angleTo(ship, { dx: -threat.dx, dy: -threat.dy, distance: threat.distance });
-    return { ...steerTo(away, 0.3), thrust: Math.abs(away) < 1.2, fire: false };
+    const use = ship.ability === "warp" && Math.abs(away) < 0.4;
+    return { ...steerTo(away, 0.3), thrust: Math.abs(away) < 1.2, fire: false, use };
   }
 
   const target = prey(world, ship);
   if (!target) return { ...IDLE, thrust: rng.next() < 0.5 };
   const diff = angleTo(ship, target);
+  const aimed = Math.abs(diff) < 0.18;
+  const use =
+    (ship.ability === "missile" && aimed && target.distance < 1200) ||
+    (ship.ability === "nuke" && aimed && target.distance > 300 && target.distance < 600) ||
+    (ship.ability === "gravity" && target.distance < 500 && rng.next() < 0.05);
   return {
     ...steerTo(diff, 0.08),
     thrust: target.distance > 260 && Math.abs(diff) < 0.9,
-    fire: Math.abs(diff) < 0.18 && target.distance < 650 && rng.next() < 0.7,
+    fire: aimed && target.distance < 650 && rng.next() < 0.7,
+    use,
   };
 }
 
@@ -97,6 +104,7 @@ export class Bot implements PlayerInput {
   readonly name: string;
   readonly rng: Rng;
   #seq = 0;
+  #used = false;
 
   constructor(playerId: string, index: number) {
     this.playerId = playerId;
@@ -109,6 +117,9 @@ export class Bot implements PlayerInput {
   think(world: World, ship: Ship): InputRecord {
     this.#seq += 1;
     const next: Seq = seq(this.#seq);
-    return { seq: next, buttons: packButtons(decide(world, ship, this.rng)) };
+    const controls = decide(world, ship, this.rng);
+    const use = controls.use === true && !this.#used;
+    this.#used = controls.use === true;
+    return { seq: next, buttons: packButtons({ ...controls, use }) };
   }
 }

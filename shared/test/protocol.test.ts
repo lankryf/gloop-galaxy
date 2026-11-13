@@ -33,8 +33,8 @@ describe("parseClientMessage", () => {
     expect(parseClientMessage(join("a".repeat(17))).ok).toBe(false);
   });
 
-  test("input buttons above 15 are rejected", () => {
-    const msg = { v: 0, type: "input", inputs: [{ seq: 1, buttons: 16 }] };
+  test("input buttons above 31 are rejected", () => {
+    const msg = { v: 0, type: "input", inputs: [{ seq: 1, buttons: 32 }] };
     expect(parseClientMessage(JSON.stringify(msg)).ok).toBe(false);
   });
 

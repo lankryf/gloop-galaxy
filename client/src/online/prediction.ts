@@ -2,7 +2,7 @@ import type { Seq } from "@gloop/shared/ids.ts";
 import type { WellSnap } from "@gloop/shared/protocol.ts";
 import { ARENA } from "@gloop/shared/sim/arena.ts";
 import type { WellField } from "@gloop/shared/sim/gravity.ts";
-import { bodyField } from "@gloop/shared/sim/gravity.ts";
+import { bodyField, pullField } from "@gloop/shared/sim/gravity.ts";
 import type { Controls, MovedShip, ShipState } from "@gloop/shared/sim/ship.ts";
 import { quantizeShip, shipPhysics } from "@gloop/shared/sim/ship.ts";
 import { WELLS } from "@gloop/shared/sim/well.ts";
@@ -20,6 +20,10 @@ export interface MovingWell extends WellField {
 
 export function bodyAt(x: number, y: number, radius: number): MovingWell {
   return { ...bodyField(x, y, radius), vx: 0, vy: 0 };
+}
+
+export function pullAt(x: number, y: number): MovingWell {
+  return { ...pullField(x, y), vx: 0, vy: 0 };
 }
 
 export function toWellField(e: WellSnap): MovingWell {

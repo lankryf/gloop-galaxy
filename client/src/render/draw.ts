@@ -46,6 +46,7 @@ export interface PickupLook {
 }
 
 export interface WellLook {
+  readonly id?: number;
   readonly type: WellType;
   readonly range: number;
   readonly radius: number;
@@ -90,7 +91,7 @@ const NEBULAE: readonly (readonly [number, number])[] = [
   [0.7, 0.65],
 ];
 
-const DEFAULT_THEME: Pick<Theme, "background" | "planet"> = {
+const DEFAULT_THEME: Pick<Theme, "background" | "planet" | "tile"> = {
   background: ["#3d1b63", "#140a24"],
   planet: { x: 0.82, y: 0.2, r: 70, color: "#ff7ad9" },
 };
@@ -103,12 +104,14 @@ interface CachedBackground {
 
 let cachedBackground: CachedBackground | null = null;
 
+type BackgroundTheme = Pick<Theme, "background" | "planet" | "tile">;
+
 export function drawCachedBackground(
   ctx: Ctx,
   arena: ArenaSize,
   view: View,
-  theme: Pick<Theme, "background" | "planet"> = DEFAULT_THEME,
-  tiles: readonly (readonly [number, number])[] = [[0, 0]],
+  theme: BackgroundTheme = DEFAULT_THEME,
+  sprites: Sprites | null = null,
 ): void {
   const pixels = Math.min(1, view.scale * view.dpr);
   if (cachedBackground?.theme !== theme || cachedBackground.pixels !== pixels) {
@@ -117,24 +120,38 @@ export function drawCachedBackground(
     canvas.height = Math.ceil(arena.height * pixels);
     const off = canvas.getContext("2d");
     if (!off) {
-      drawBackground(ctx, arena, theme);
+      drawBackground(ctx, arena, theme, sprites);
       return;
     }
     off.scale(pixels, pixels);
-    drawBackground(off, arena, theme);
+    drawBackground(off, arena, theme, sprites);
     cachedBackground = { canvas, theme, pixels };
   }
-  for (const [x, y] of tiles)
-    ctx.drawImage(cachedBackground.canvas, x, y, arena.width, arena.height);
+  ctx.drawImage(cachedBackground.canvas, 0, 0, arena.width, arena.height);
+}
+
+function tilePattern(ctx: Ctx, sheet: SpriteSheet, name: string): CanvasPattern | null {
+  const frame = sheet.frames[name];
+  if (!frame) return null;
+  const tile = document.createElement("canvas");
+  tile.width = frame[2];
+  tile.height = frame[3];
+  tile
+    .getContext("2d")
+    ?.drawImage(sheet.image, frame[0], frame[1], frame[2], frame[3], 0, 0, frame[2], frame[3]);
+  return ctx.createPattern(tile, "repeat");
 }
 
 export function drawBackground(
   ctx: Ctx,
   arena: ArenaSize,
-  theme: Pick<Theme, "background" | "planet"> = DEFAULT_THEME,
+  theme: BackgroundTheme = DEFAULT_THEME,
+  sprites: Sprites | null = null,
 ): void {
   const [inner, outer] = theme.background;
-  ctx.fillStyle = outer;
+  const pattern =
+    sprites?.backgrounds && theme.tile ? tilePattern(ctx, sprites.backgrounds, theme.tile) : null;
+  ctx.fillStyle = pattern ?? outer;
   ctx.fillRect(0, 0, arena.width, arena.height);
   const reach = Math.min(arena.width, arena.height) / 2;
   for (const [fx, fy] of NEBULAE) {
@@ -142,12 +159,24 @@ export function drawBackground(
     const cy = arena.height * fy;
     const g = ctx.createRadialGradient(cx, cy, 30, cx, cy, reach);
     g.addColorStop(0, inner);
-    g.addColorStop(1, outer);
-    ctx.globalAlpha = 0.55;
+    g.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.globalAlpha = pattern ? 0.35 : 0.55;
     ctx.fillStyle = g;
     ctx.fillRect(cx - reach, cy - reach, reach * 2, reach * 2);
   }
   ctx.globalAlpha = 1;
+
+  const { x, y, r, color, sprite } = theme.planet;
+  const px = arena.width * x;
+  const py = arena.height * y;
+  const planets = sprites?.planets;
+  if (planets && sprite) {
+    ctx.globalAlpha = 0.55;
+    drawSprite(ctx, planets, sprite, px, py, 0, (r * 2.4) / 150);
+    ctx.globalAlpha = 1;
+    return;
+  }
+  if (pattern) return;
 
   stars ??= makeStars(
     arena.width,
@@ -162,22 +191,10 @@ export function drawBackground(
     ctx.fill();
   }
   ctx.globalAlpha = 1;
-
-  const { x, y, r, color } = theme.planet;
-  const px = arena.width * x;
-  const py = arena.height * y;
   ctx.globalAlpha = 0.45;
   ctx.fillStyle = color;
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 6;
   ctx.beginPath();
   ctx.arc(px, py, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = "rgba(26, 11, 38, 0.18)";
-  ctx.beginPath();
-  ctx.arc(px - r * 0.3, py + r * 0.2, r * 0.26, 0, Math.PI * 2);
-  ctx.arc(px + r * 0.35, py - r * 0.3, r * 0.14, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
 }
@@ -231,20 +248,6 @@ export function interpolateShip(
   return { ...interpolate(ship, alpha), thrust: ship.thrust };
 }
 
-function drawFlame(ctx: Ctx, time: number): void {
-  const flicker = 10 + Math.sin(time * 0.05) * 6;
-  ctx.fillStyle = "#ffd23f";
-  ctx.strokeStyle = "#ff7a00";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(-14, -6);
-  ctx.lineTo(-30 - flicker, 0);
-  ctx.lineTo(-14, 6);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-}
-
 export function drawName(ctx: Ctx, name: string, x: number, y: number, own: boolean): void {
   ctx.font = "bold 15px sans-serif";
   ctx.textAlign = "center";
@@ -256,21 +259,37 @@ export function drawName(ctx: Ctx, name: string, x: number, y: number, own: bool
   ctx.textAlign = "start";
 }
 
+const OTHER_SHIPS = ["other0", "other1", "other2", "other3"] as const;
+
+export function shipFrame(id: number, own: boolean, bot = false): string {
+  if (own) return "player";
+  if (bot) return "dummy";
+  return OTHER_SHIPS[id % OTHER_SHIPS.length] ?? "other0";
+}
+
 export function drawShip(
   ctx: Ctx,
   ship: ShipPose,
   time: number,
   own = true,
   sprites: Sprites | null = null,
+  frame = own ? "player" : "dummy",
 ): void {
   if (sprites?.ships) {
-    ctx.save();
-    ctx.translate(ship.x, ship.y);
-    ctx.rotate(ship.angle);
-    ctx.scale(1.5, 1.5);
-    if (ship.thrust) drawFlame(ctx, time);
-    ctx.restore();
-    drawSprite(ctx, sprites.ships, own ? "player" : "dummy", ship.x, ship.y, ship.angle);
+    if (ship.thrust) {
+      const back = -34 - Math.sin(time * 0.04) * 3;
+      const flicker = 0.9 + Math.sin(time * 0.05) * 0.15;
+      drawSprite(
+        ctx,
+        sprites.ships,
+        "flame",
+        ship.x + Math.cos(ship.angle) * back,
+        ship.y + Math.sin(ship.angle) * back,
+        ship.angle,
+        flicker,
+      );
+    }
+    drawSprite(ctx, sprites.ships, frame, ship.x, ship.y, ship.angle);
     return;
   }
 
@@ -346,9 +365,9 @@ export function drawHud(
   drawPanel(ctx, view, hudLines(stats, extra));
 }
 
-export function drawBullet(ctx: Ctx, b: Pose, sprites: Sprites | null = null): void {
+export function drawBullet(ctx: Ctx, b: Pose, sprites: Sprites | null = null, own = true): void {
   if (sprites?.items) {
-    drawSprite(ctx, sprites.items, "bullet", b.x, b.y, b.angle, 0.8);
+    drawSprite(ctx, sprites.items, own ? "bullet" : "enemyBullet", b.x, b.y, b.angle, 0.9);
     return;
   }
   ctx.fillStyle = GOO;
@@ -383,7 +402,7 @@ export function drawAsteroid(
 ): void {
   if (sprites?.asteroids) {
     const frame = `${a.hunter ? "hunter" : "rock"}${a.id % 4}`;
-    drawSprite(ctx, sprites.asteroids, frame, p.x, p.y, a.hunter ? 0 : p.angle, a.radius / 52);
+    drawSprite(ctx, sprites.asteroids, frame, p.x, p.y, p.angle, a.radius / 50);
     return;
   }
   ctx.save();
@@ -433,11 +452,19 @@ const PICKUP_COLORS: Readonly<Record<PickupType, string>> = {
   shield: "#4fd8ff",
   rapid: "#ffd23f",
   homing: "#ff7ad9",
+  missile: "#ff5c5c",
+  nuke: "#ffd23f",
+  gravity: "#4fa8ff",
+  warp: "#8dff3a",
 };
 const PICKUP_LETTERS: Readonly<Record<PickupType, string>> = {
   shield: "S",
   rapid: "R",
   homing: "H",
+  missile: "M",
+  nuke: "N",
+  gravity: "G",
+  warp: "W",
 };
 
 export function drawPickup(ctx: Ctx, p: PickupLook, sprites: Sprites | null = null): void {
@@ -463,7 +490,86 @@ export function drawPickup(ctx: Ctx, p: PickupLook, sprites: Sprites | null = nu
   ctx.restore();
 }
 
-export function drawShield(ctx: Ctx, p: Point): void {
+export function drawPull(ctx: Ctx, p: Point, time: number): void {
+  ctx.save();
+  for (let i = 0; i < 3; i++) {
+    const phase = (((time / 900 + i / 3) % 1) + 1) % 1;
+    const r = 260 * (1 - phase) + 40;
+    ctx.globalAlpha = 0.5 * phase;
+    ctx.strokeStyle = "#4fa8ff";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+export interface MissileLook {
+  readonly x: number;
+  readonly y: number;
+  readonly angle: number;
+  readonly type: "homing" | "nuke";
+}
+
+export function drawMissile(
+  ctx: Ctx,
+  m: MissileLook,
+  time: number,
+  sprites: Sprites | null = null,
+): void {
+  if (m.type === "nuke") {
+    const pulse = Math.floor(time / 150) % 2 === 0;
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = pulse ? "#ff5c5c" : "#ffd23f";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, 34, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    if (sprites?.items) {
+      drawSprite(ctx, sprites.items, "bomb", m.x, m.y, time / 300);
+      return;
+    }
+    ctx.fillStyle = "#ffd23f";
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, 16, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
+  if (sprites?.items && sprites.ships) {
+    const back = -26;
+    drawSprite(
+      ctx,
+      sprites.ships,
+      "flame",
+      m.x + Math.cos(m.angle) * back,
+      m.y + Math.sin(m.angle) * back,
+      m.angle,
+      0.6,
+    );
+    drawSprite(ctx, sprites.items, "rocket", m.x, m.y, m.angle);
+    return;
+  }
+  ctx.fillStyle = "#ff5c5c";
+  ctx.beginPath();
+  ctx.arc(m.x, m.y, 8, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+export function drawShield(
+  ctx: Ctx,
+  p: Point & { readonly angle?: number },
+  sprites: Sprites | null = null,
+): void {
+  if (sprites?.ships) {
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    drawSprite(ctx, sprites.ships, "shield", p.x, p.y, (p.angle ?? 0) + Math.PI / 2, 1);
+    ctx.restore();
+    return;
+  }
   ctx.strokeStyle = "rgba(79, 216, 255, 0.8)";
   ctx.lineWidth = 4;
   ctx.beginPath();
@@ -565,7 +671,22 @@ function drawPlanet(ctx: Ctx, w: WellLook, p: Pose): void {
   ctx.restore();
 }
 
-export function drawWell(ctx: Ctx, w: WellLook, p: Pose, time: number): void {
-  if (w.type === "blackhole") drawBlackHole(ctx, w, p, time);
-  else drawPlanet(ctx, w, p);
+export function drawWell(
+  ctx: Ctx,
+  w: WellLook,
+  p: Pose,
+  time: number,
+  sprites: Sprites | null = null,
+): void {
+  if (w.type === "blackhole") {
+    drawBlackHole(ctx, w, p, time);
+    return;
+  }
+  const sheet = sprites?.planets;
+  if (sheet) {
+    drawRange(ctx, p.x, p.y, w.range, "rgba(79, 216, 255, 0.14)");
+    drawSprite(ctx, sheet, `planet${(w.id ?? 0) % 10}`, p.x, p.y, p.angle, (w.radius * 2.25) / 150);
+    return;
+  }
+  drawPlanet(ctx, w, p);
 }

@@ -2,7 +2,8 @@ import type { Bus } from "@gloop/shared/bus.ts";
 import type { EntityId } from "@gloop/shared/ids.ts";
 import type { WorldEvents } from "@gloop/shared/sim/world.ts";
 
-export type SoundName = "shoot" | "hit" | "explosion" | "pickup";
+export const SOUND_NAMES = ["shoot", "hit", "explosion", "pickup", "ability", "lose"] as const;
+export type SoundName = (typeof SOUND_NAMES)[number];
 
 export interface Audio {
   readonly context: AudioContext;
@@ -56,10 +57,11 @@ export function createAudio(): Audio {
         if (d.kind !== "bullet") play("explosion", { volume: 0.9, rate: 0.45 });
       });
       bus.on("collapsed", () => play("explosion", { volume: 1, rate: 0.3 }));
+      bus.on("ability", (d) => play("ability", { volume: d.shipId === ownId() ? 0.8 : 0.4 }));
     },
   };
 }
 
 export function isSoundName(name: string): name is SoundName {
-  return name === "shoot" || name === "hit" || name === "explosion" || name === "pickup";
+  return SOUND_NAMES.some((n) => n === name);
 }

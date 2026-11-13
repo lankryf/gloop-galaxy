@@ -15,7 +15,6 @@ import { ARENA, outside } from "@gloop/shared/sim/arena.ts";
 import { BULLET } from "@gloop/shared/sim/bullet.ts";
 import { Explosion } from "@gloop/shared/sim/explosion.ts";
 import { gravityAt } from "@gloop/shared/sim/gravity.ts";
-import type { PickupType } from "@gloop/shared/sim/pickup.ts";
 import { createRng } from "@gloop/shared/sim/random.ts";
 import type { Controls, MovedShip } from "@gloop/shared/sim/ship.ts";
 import { SHIP } from "@gloop/shared/sim/ship.ts";
@@ -40,13 +39,16 @@ import {
   drawBullet,
   drawCachedBackground,
   drawExplosion,
+  drawMissile,
   drawName,
   drawPickup,
+  drawPull,
   drawShield,
   drawShip,
   drawWell,
   hudLines,
   lerp,
+  shipFrame,
 } from "../render/draw.ts";
 import { Minimap } from "../render/minimap.ts";
 import { TextPanel } from "../render/panel.ts";
@@ -54,11 +56,18 @@ import { SnapshotBuffer } from "./interpolation.ts";
 import type { Netgraph } from "./netgraph.ts";
 import { createNetgraph } from "./netgraph.ts";
 import type { MovingWell, PendingInput } from "./prediction.ts";
-import { bodyAt, Predictor, toWellField } from "./prediction.ts";
+import { bodyAt, Predictor, pullAt, toWellField } from "./prediction.ts";
 import { WorkerDecoder } from "./worker-decoder.ts";
 
 const REDUNDANCY = 3;
-const DRAW_ORDER: readonly EntitySnap["kind"][] = ["well", "pickup", "asteroid", "bullet", "ship"];
+const DRAW_ORDER: readonly EntitySnap["kind"][] = [
+  "well",
+  "pickup",
+  "asteroid",
+  "bullet",
+  "missile",
+  "ship",
+];
 const HUD_REFRESH_MS = 250;
 const WELL_MARGIN = 520;
 const PICKUP_RADIUS = 18;
@@ -142,6 +151,7 @@ export function startOnlineGame({
   let me: ShipSnap | null = null;
   let wells: MovingWell[] = [];
   let cooldown = 0;
+  let wasDead = false;
   const localBullets: LocalBullet[] = [];
   const bulletPool = new Pool<LocalBullet>(
     () => ({ shot: toSeq(0), x: 0, y: 0, vx: 0, vy: 0, ttl: 0, prevX: 0, prevY: 0 }),
@@ -157,6 +167,7 @@ export function startOnlineGame({
       left: input.isDown("ArrowLeft") || input.isDown("KeyA"),
       right: input.isDown("ArrowRight") || input.isDown("KeyD"),
       fire: input.isDown("Space"),
+      use: input.isDown("KeyE") || input.isDown("ShiftLeft"),
     };
   }
 
@@ -214,6 +225,15 @@ export function startOnlineGame({
       case "collapsed":
         audio?.play("explosion", { volume: 1, rate: 0.3 });
         return;
+      case "ability":
+        audio?.play("ability", { volume: ev.shipId === myShip ? 0.8 : 0.4 });
+        if (ev.shipId === myShip) popup(PICKUP_NAMES[ev.ability], ev.x, ev.y);
+        if (ev.ability === "warp") {
+          explosions.push(
+            explosionPool.acquire().reset({ pos: new Vector2(ev.x, ev.y), rng, size: 0.6 }),
+          );
+        }
+        return;
       default:
         assertNever(ev);
     }
@@ -231,12 +251,16 @@ export function startOnlineGame({
       else if (e.kind === "well") wells.push(toWellField(e));
       else if (e.kind === "asteroid") wells.push(bodyAt(e.x, e.y, e.radius));
       else if (e.kind === "pickup") wells.push(bodyAt(e.x, e.y, PICKUP_RADIUS));
+      else if (e.kind === "ship" && e.flags & ShipFlag.pull) wells.push(pullAt(e.x, e.y));
       else if (e.kind === "bullet" && e.owner === myShip) {
         shots.add(e.shot);
         seenShots.add(e.shot);
       }
     }
 
+    const dead = me !== null && (me.flags & ShipFlag.dead) !== 0;
+    if (dead && !wasDead) audio?.play("lose", { volume: 0.8 });
+    wasDead = dead;
     if (!isAlive(me)) {
       predictor.reset();
       clearBullets();
@@ -397,9 +421,16 @@ export function startOnlineGame({
         const config = WELLS[e.type];
         drawWell(
           ctx,
-          { type: e.type, range: config.range, radius: config.radius, timeLeft: e.timeLeft / 10 },
+          {
+            id: e.id,
+            type: e.type,
+            range: config.range,
+            radius: config.radius,
+            timeLeft: e.timeLeft / 10,
+          },
           e,
           now,
+          sprites,
         );
         return;
       }
@@ -414,8 +445,16 @@ export function startOnlineGame({
           bulletScratch.x = e.x;
           bulletScratch.y = e.y;
           bulletScratch.angle = Math.atan2(e.vy, e.vx);
-          drawBullet(ctx, bulletScratch, sprites);
+          drawBullet(ctx, bulletScratch, sprites, e.owner === myShip);
         }
+        return;
+      case "missile":
+        drawMissile(
+          ctx,
+          { x: e.x, y: e.y, angle: Math.atan2(e.vy, e.vx), type: e.type },
+          now,
+          sprites,
+        );
         return;
       case "ship": {
         if (e.id === myShip || e.flags & ShipFlag.dead) return;
@@ -424,8 +463,16 @@ export function startOnlineGame({
         p.y = e.y;
         p.angle = e.angle;
         p.thrust = (e.flags & ShipFlag.thrust) !== 0;
-        drawShip(ctx, p, now, false, sprites);
-        if (e.flags & ShipFlag.shield) drawShield(ctx, p);
+        if (e.flags & ShipFlag.pull) drawPull(ctx, p, now);
+        drawShip(
+          ctx,
+          p,
+          now,
+          false,
+          sprites,
+          shipFrame(e.id, false, (e.flags & ShipFlag.bot) !== 0),
+        );
+        if (e.flags & ShipFlag.shield) drawShield(ctx, p, sprites);
         drawName(
           ctx,
           names.get(e.id) ?? (e.flags & ShipFlag.bot ? "манекен" : "?"),
@@ -451,10 +498,11 @@ export function startOnlineGame({
 
   function buildHud(entities: readonly EntitySnap[], stats: LoopStats): string[] {
     const self = me;
-    const effects: PickupType[] = [];
-    if (self && self.flags & ShipFlag.shield) effects.push("shield");
-    if (self && self.flags & ShipFlag.rapid) effects.push("rapid");
-    if (self && self.flags & ShipFlag.homing) effects.push("homing");
+    const effects: string[] = [];
+    if (self && self.flags & ShipFlag.shield) effects.push("щит");
+    if (self && self.flags & ShipFlag.rapid) effects.push("вогонь");
+    if (self && self.flags & ShipFlag.homing) effects.push("наведення");
+    if (self && self.flags & ShipFlag.pull) effects.push("притягування");
     const scores = entities
       .filter((e) => e.kind === "ship")
       .filter((e) => !(e.flags & ShipFlag.bot))
@@ -471,6 +519,7 @@ export function startOnlineGame({
       `tick     ${buffer.latest?.tick ?? 0}`,
       `hp       ${hp}`,
       `effects  ${effects.join(", ") || "-"}`,
+      `skill    ${self?.ability ? `${PICKUP_NAMES[self.ability]} [E]` : "-"}`,
       "",
       ...scores,
     ]);
@@ -503,6 +552,9 @@ export function startOnlineGame({
         case "ship":
           if (e.id !== myShip && !(e.flags & ShipFlag.dead)) minimap.dot(ctx, e, 3, "#ff9f1c");
           break;
+        case "missile":
+          minimap.dot(ctx, e, e.type === "nuke" ? 3 : 2, "#ff4f4f");
+          break;
         case "bullet":
           break;
         default:
@@ -525,7 +577,7 @@ export function startOnlineGame({
     const pose = isAlive(self) ? ownPose(alpha, self) : null;
     if (pose) camera.follow(pose.x, pose.y);
     camera.begin(ctx, view);
-    drawCachedBackground(ctx, ARENA, view, theme);
+    drawCachedBackground(ctx, ARENA, view, theme, sprites);
     camera.border(ctx);
     for (const kind of DRAW_ORDER) {
       const margin = kind === "well" ? WELL_MARGIN : ENTITY_MARGIN;
@@ -543,8 +595,9 @@ export function startOnlineGame({
     }
 
     if (isAlive(self) && pose) {
+      if (self.flags & ShipFlag.pull) drawPull(ctx, pose, now);
       drawShip(ctx, pose, now, true, sprites);
-      if (self.flags & ShipFlag.shield) drawShield(ctx, pose);
+      if (self.flags & ShipFlag.shield) drawShield(ctx, pose, sprites);
       drawName(ctx, names.get(myShip) ?? "ти", pose.x, pose.y, true);
     }
 

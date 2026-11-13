@@ -20,6 +20,10 @@ export const PICKUP_NAMES: Readonly<Record<PickupType, string>> = {
   shield: "ЩИТ",
   rapid: "ШВИДКИЙ ВОГОНЬ",
   homing: "САМОНАВЕДЕННЯ",
+  missile: "РАКЕТА",
+  nuke: "ЯДЕРНА БОМБА",
+  gravity: "ГРАВІТАЦІЙНЕ ПРИТЯГУВАННЯ",
+  warp: "ВАРП-СТРИБОК",
 };
 
 export interface Hud {
@@ -38,6 +42,9 @@ export function createHud(bus: Bus<WorldEvents>): Hud {
   });
   bus.on("pickup", ({ type, x, y }) => {
     popups.push({ text: PICKUP_NAMES[type], x, y, ttl: 1.4, big: true });
+  });
+  bus.on("ability", ({ ability, x, y }) => {
+    popups.push({ text: PICKUP_NAMES[ability], x, y, ttl: 1.2, big: false });
   });
   bus.on("swallowed", ({ kind, x, y }) => {
     if (kind === "ship") popups.push({ text: "НЯМ!", x, y, ttl: 1.4, big: true });

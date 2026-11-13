@@ -24,12 +24,15 @@ import {
   drawCachedBackground,
   drawExplosion,
   drawHud,
+  drawMissile,
   drawPickup,
+  drawPull,
   drawShield,
   drawShip,
   drawWell,
   interpolate,
   interpolateShip,
+  shipFrame,
 } from "./render/draw.ts";
 
 export interface OfflineOptions {
@@ -92,12 +95,17 @@ export function startGame({
       left: input.isDown("ArrowLeft") || input.isDown("KeyA"),
       right: input.isDown("ArrowRight") || input.isDown("KeyD"),
       fire: input.isDown("Space"),
+      use: input.isDown("KeyE") || input.isDown("ShiftLeft"),
     };
   }
+
+  let wasDead = false;
 
   function simulate(dt: number): void {
     ship.controls = readControls();
     world.step(dt);
+    if (ship.dead && !wasDead) audio?.play("lose", { volume: 0.8 });
+    wasDead = ship.dead;
     hud.update(dt);
     simTime += dt;
     input.endStep();
@@ -120,12 +128,12 @@ export function startGame({
       camera.follow(me.x, me.y);
     }
     camera.begin(ctx, view);
-    drawCachedBackground(ctx, ARENA, view, theme);
+    drawCachedBackground(ctx, ARENA, view, theme, sprites);
     camera.border(ctx);
     for (const w of world.ofKind("well")) {
       const p = interpolate(w, alpha);
       if (!camera.place(p.x, p.y, 520)) continue;
-      drawWell(ctx, w, p, now);
+      drawWell(ctx, w, p, now, sprites);
     }
     for (const p of world.ofKind("pickup")) {
       if (!camera.place(p.pos.x, p.pos.y)) continue;
@@ -139,14 +147,25 @@ export function startGame({
     for (const b of world.ofKind("bullet")) {
       const p = interpolate(b, alpha);
       if (!camera.place(p.x, p.y)) continue;
-      drawBullet(ctx, p, sprites);
+      drawBullet(ctx, p, sprites, b.ownerId === ship.id);
+    }
+    for (const m of world.ofKind("missile")) {
+      const p = interpolate(m, alpha);
+      if (!camera.place(p.x, p.y)) continue;
+      drawMissile(
+        ctx,
+        { x: p.x, y: p.y, angle: Math.atan2(m.vel.y, m.vel.x), type: m.type },
+        now,
+        sprites,
+      );
     }
     for (const s of world.ofKind("ship")) {
       if (s.dead) continue;
       const p = interpolateShip(s, alpha);
       if (!camera.place(p.x, p.y)) continue;
-      drawShip(ctx, p, now, s === ship, sprites);
-      if (s.effects.has("shield")) drawShield(ctx, p);
+      if (s.effects.has("pull")) drawPull(ctx, p, now);
+      drawShip(ctx, p, now, s === ship, sprites, shipFrame(s.id, s === ship, s !== ship));
+      if (s.effects.has("shield")) drawShield(ctx, p, sprites);
     }
     for (const e of world.ofKind("explosion")) {
       if (!camera.place(e.pos.x, e.pos.y)) continue;
@@ -160,6 +179,7 @@ export function startGame({
       `pilot    ${ship.name}`,
       `score    ${ship.score}`,
       `effects  ${[...ship.effects.keys()].join(", ") || "-"}`,
+      `skill    ${ship.ability ? `${ship.ability} [E]` : "-"}`,
       `hp       ${ship.hp}${ship.dead ? ` (respawn ${ship.respawnIn.toFixed(1)}s)` : ""}`,
       experiment.name ? `exp      ${experiment.name}` : "",
     ]);

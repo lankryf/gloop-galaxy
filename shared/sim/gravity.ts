@@ -41,23 +41,46 @@ export function bodyField(x: number, y: number, radius: number): WellField {
   };
 }
 
-export function gravityFields(world: World): WellField[] {
+export const PULL = { radius: 30, range: 750, strength: 7e6 };
+
+export function pullField(x: number, y: number): WellField {
+  return { x, y, ...PULL };
+}
+
+export function gravityFields(world: World, except: unknown = null): WellField[] {
   const fields: WellField[] = [];
   for (const well of world.ofKind("well")) fields.push(well.field);
   for (const asteroid of world.ofKind("asteroid"))
     fields.push(bodyField(asteroid.pos.x, asteroid.pos.y, asteroid.radius));
   for (const pickup of world.ofKind("pickup"))
     fields.push(bodyField(pickup.pos.x, pickup.pos.y, pickup.radius));
+  for (const ship of world.ofKind("ship")) {
+    if (ship !== except && !ship.dead && ship.effects.has("pull"))
+      fields.push(pullField(ship.pos.x, ship.pos.y));
+  }
   return fields;
 }
 
 export function applyGravity(world: World, dt: number): void {
-  const wells = gravityFields(world);
-  if (wells.length === 0) return;
+  const all = gravityFields(world);
+  if (all.length === 0) return;
+  const pulls: WellField[] = [];
+  const natural: WellField[] = [];
+  for (const field of all)
+    (field.strength === PULL.strength && field.range === PULL.range ? pulls : natural).push(field);
 
   for (const entity of world) {
-    if (!entity.alive || (entity.kind !== "bullet" && entity.kind !== "asteroid")) continue;
-    const { ax, ay } = gravityAt(entity.pos.x, entity.pos.y, wells);
+    if (!entity.alive) continue;
+    const fields =
+      entity.kind === "asteroid" || entity.kind === "missile"
+        ? all
+        : entity.kind === "bullet"
+          ? natural
+          : entity.kind === "pickup"
+            ? pulls
+            : null;
+    if (!fields || fields.length === 0) continue;
+    const { ax, ay } = gravityAt(entity.pos.x, entity.pos.y, fields);
     if (ax !== 0 || ay !== 0) {
       entity.vel = entity.vel.add({ x: ax * dt, y: ay * dt });
     }

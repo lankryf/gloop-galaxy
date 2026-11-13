@@ -53,6 +53,7 @@ function flagsOf(ship: Ship): number {
   if (ship.effects.has("shield")) flags |= ShipFlag.shield;
   if (ship.effects.has("rapid")) flags |= ShipFlag.rapid;
   if (ship.effects.has("homing")) flags |= ShipFlag.homing;
+  if (ship.effects.has("pull")) flags |= ShipFlag.pull;
   if (!ship.inputDriven) flags |= ShipFlag.bot;
   return flags;
 }
@@ -71,7 +72,10 @@ function snapshotOf(e: AnyEntity): EntitySnap | null {
         flags: flagsOf(e),
         score: Math.min(e.score, 0xffff),
         respawn: e.dead ? Math.max(0, Math.ceil(e.respawnIn * 10)) : 0,
+        ability: e.ability,
       };
+    case "missile":
+      return { ...base, kind: "missile", vx: e.vel.x, vy: e.vel.y, owner: e.ownerId, type: e.type };
     case "bullet":
       return { ...base, kind: "bullet", vx: e.vel.x, vy: e.vel.y, owner: e.ownerId, shot: e.shot };
     case "asteroid":
@@ -165,6 +169,9 @@ export class Match {
       push({ type: "swallowed", x: d.x, y: d.y, what: d.kind, shipId: d.shipId ?? null }),
     );
     events.on("collapsed", (d) => push({ type: "collapsed", x: d.x, y: d.y }));
+    events.on("ability", (d) =>
+      push({ type: "ability", x: d.x, y: d.y, shipId: d.shipId, ability: d.ability }),
+    );
   }
 
   addPlayer(player: Player, { codec, send }: { codec: CodecName; send: Deliver }): EntityId {

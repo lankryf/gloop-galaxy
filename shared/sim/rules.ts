@@ -6,9 +6,12 @@ import type { Pair } from "./collision.ts";
 import { Explosion } from "./explosion.ts";
 import type { AnyEntity, EntityKind, OfKind } from "./kinds.ts";
 import { isKind } from "./kinds.ts";
+import type { Missile } from "./missile.ts";
+import { MISSILE } from "./missile.ts";
 import { Pickup } from "./pickup.ts";
 import type { Ship } from "./ship.ts";
-import type { Point, Vector2 } from "./vector.ts";
+import type { Point } from "./vector.ts";
+import { Vector2 } from "./vector.ts";
 import type { GravityWell } from "./well.ts";
 import type { World } from "./world.ts";
 
@@ -51,10 +54,7 @@ function asteroidBullet(world: World, asteroid: Asteroid, bullet: Bullet): void 
     ownerId: bullet.ownerId,
   });
   if (asteroid.hp > 0) return;
-  asteroid.alive = false;
-  credit(world, bullet.ownerId, SCORE.asteroid, asteroid.pos);
-  explode(world, asteroid.pos, asteroid.radius / 35, "#b49ad1");
-  world.later(world.rng.range(0.5, 2), (w) => w.spawn(Asteroid.incoming(w.rng, ARENA)));
+  shatter(world, asteroid, bullet.ownerId);
 }
 
 function bulletShip(world: World, bullet: Bullet, ship: Ship): void {
@@ -161,6 +161,59 @@ function rule<A extends EntityKind, B extends EntityKind>(
   };
 }
 
+export function detonate(world: World, missile: Missile): void {
+  if (!missile.alive) return;
+  missile.alive = false;
+  const { blast, damage } = MISSILE[missile.type];
+  const at = missile.pos;
+  explode(
+    world,
+    at,
+    missile.type === "nuke" ? 6 : 1.6,
+    missile.type === "nuke" ? "#ffd23f" : "#ff7a3d",
+  );
+  for (const ship of world.ofKind("ship")) {
+    if (ship.dead || (missile.type === "nuke" && ship.id === missile.ownerId)) continue;
+    const away = ship.pos.sub(at);
+    const d = away.length();
+    if (d > blast) continue;
+    const k = 1 - d / blast;
+    const dir = d > 0 ? away.scale(1 / d) : new Vector2(1, 0);
+    ship.vel = ship.vel.add(dir.scale(650 * k));
+    world.emit("hit", {
+      x: ship.pos.x,
+      y: ship.pos.y,
+      target: "ship",
+      shipId: ship.id,
+      ownerId: missile.ownerId,
+    });
+    if (ship.damage(Math.round(damage * Math.max(0.35, k)))) {
+      credit(world, missile.ownerId, SCORE.ship, ship.pos);
+      explode(world, ship.pos, 1.4);
+    }
+  }
+  for (const asteroid of world.ofKind("asteroid")) {
+    if (asteroid.pos.sub(at).length() > blast + asteroid.radius) continue;
+    shatter(world, asteroid, missile.ownerId);
+  }
+}
+
+function shatter(world: World, asteroid: Asteroid, ownerId: EntityId): void {
+  asteroid.alive = false;
+  credit(world, ownerId, SCORE.asteroid, asteroid.pos);
+  explode(world, asteroid.pos, asteroid.radius / 35, "#b49ad1");
+  world.later(world.rng.range(0.5, 2), (w) => w.spawn(Asteroid.incoming(w.rng, ARENA)));
+}
+
+function missileWell(world: World, missile: Missile, well: GravityWell): void {
+  if (well.solid) {
+    detonate(world, missile);
+    return;
+  }
+  missile.alive = false;
+  world.emit("swallowed", { x: well.pos.x, y: well.pos.y, kind: "bullet" });
+}
+
 const RULES: readonly Rule[] = [
   rule("asteroid", "bullet", asteroidBullet),
   rule("bullet", "ship", bulletShip),
@@ -170,6 +223,11 @@ const RULES: readonly Rule[] = [
   rule("bullet", "well", bulletWell),
   rule("asteroid", "well", asteroidWell),
   rule("ship", "well", shipWell),
+  rule("missile", "ship", (world, m, ship) => {
+    if (ship.id !== m.ownerId && !ship.dead) detonate(world, m);
+  }),
+  rule("asteroid", "missile", (world, _a, m) => detonate(world, m)),
+  rule("missile", "well", missileWell),
 ];
 
 export function resolveCollisions(world: World, pairs: readonly Pair[]): void {

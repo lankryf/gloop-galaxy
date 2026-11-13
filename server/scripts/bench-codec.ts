@@ -20,6 +20,7 @@ function sampleSnapshot(ships = 5, bullets = 12, asteroids = 6): Snapshot {
       flags: 1,
       score: 230,
       respawn: 0,
+      ability: null,
     });
   }
   for (let i = 0; i < bullets; i++) {

@@ -7,8 +7,9 @@ import { Entity } from "./entity.ts";
 import { cos, hypot, sin } from "./fmath.ts";
 import type { WellField } from "./gravity.ts";
 import { gravityAt, gravityFields } from "./gravity.ts";
-import type { PickupType } from "./pickup.ts";
-import { EFFECT_DURATION } from "./pickup.ts";
+import { MISSILE, Missile } from "./missile.ts";
+import type { AbilityType, EffectType, PickupType } from "./pickup.ts";
+import { EFFECT_DURATION, isAbility } from "./pickup.ts";
 import { Vector2 } from "./vector.ts";
 import type { World } from "./world.ts";
 
@@ -30,9 +31,12 @@ export interface Controls {
   readonly left: boolean;
   readonly right: boolean;
   readonly fire: boolean;
+  readonly use?: boolean;
 }
 
-export const IDLE: Controls = { thrust: false, left: false, right: false, fire: false };
+export const IDLE: Controls = { thrust: false, left: false, right: false, fire: false, use: false };
+
+export const WARP_DISTANCE = 650;
 
 export interface ShipState {
   readonly x: number;
@@ -130,7 +134,9 @@ export class Ship extends Entity {
   deaths = 0;
   dead = false;
   respawnIn = 0;
-  readonly effects = new Map<PickupType, number>();
+  readonly effects = new Map<EffectType, number>();
+  ability: AbilityType | null = null;
+  #usedLast = false;
 
   constructor({
     pos,
@@ -185,7 +191,56 @@ export class Ship extends Entity {
   }
 
   applyPickup(type: PickupType): void {
-    this.effects.set(type, EFFECT_DURATION[type]);
+    if (isAbility(type)) this.ability = type;
+    else this.effects.set(type, EFFECT_DURATION[type]);
+  }
+
+  useAbility(world: World): void {
+    const ability = this.ability;
+    if (!ability || this.dead) return;
+    this.ability = null;
+    const dir = Vector2.fromAngle(this.angle, 1);
+    const nose = this.pos.add(dir.scale(this.radius + 14));
+    world.emit("ability", { shipId: this.id, ability, x: this.pos.x, y: this.pos.y });
+    switch (ability) {
+      case "missile":
+        world.spawn(
+          new Missile({
+            pos: nose,
+            vel: dir.scale(MISSILE.homing.speed),
+            type: "homing",
+            ownerId: this.id,
+          }),
+        );
+        return;
+      case "nuke":
+        world.spawn(
+          new Missile({
+            pos: nose,
+            vel: this.vel.scale(0.5).add(dir.scale(MISSILE.nuke.speed)),
+            type: "nuke",
+            ownerId: this.id,
+          }),
+        );
+        return;
+      case "gravity":
+        this.effects.set("pull", EFFECT_DURATION.pull);
+        return;
+      case "warp": {
+        const r = this.radius;
+        const to = this.pos.add(dir.scale(WARP_DISTANCE));
+        this.pos = new Vector2(
+          Math.min(ARENA.width - r, Math.max(r, to.x)),
+          Math.min(ARENA.height - r, Math.max(r, to.y)),
+        );
+        this.prevPos = this.pos;
+        return;
+      }
+      default: {
+        const never: never = ability;
+        throw new Error(`Unknown ability ${String(never)}`);
+      }
+    }
   }
 
   fire(world: World, shot: Seq = seq(0)): void {
@@ -212,7 +267,7 @@ export class Ship extends Entity {
 
   steer(controls: Controls, dt: number, world: World, shot: Seq = seq(0)): void {
     if (this.dead) return;
-    const next = shipPhysics(this.state, controls, dt, gravityFields(world));
+    const next = shipPhysics(this.state, controls, dt, gravityFields(world, this));
     this.pos = new Vector2(next.x, next.y);
     this.vel = new Vector2(next.vx, next.vy);
     this.angle = next.angle;
@@ -220,6 +275,9 @@ export class Ship extends Entity {
 
     this.cooldown = Math.max(0, this.cooldown - dt);
     if (controls.fire && this.cooldown === 0) this.fire(world, shot);
+    const use = controls.use === true;
+    if (use && !this.#usedLast) this.useAbility(world);
+    this.#usedLast = use;
   }
 
   override settle(): void {

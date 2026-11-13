@@ -46,6 +46,7 @@ describe("bot brain", () => {
       left: false,
       right: false,
       fire: false,
+      use: false,
     });
   });
 
