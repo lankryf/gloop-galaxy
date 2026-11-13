@@ -59,7 +59,7 @@ export const BOOST = { thrust: 1.9, maxSpeed: 1.5, heat: 10, settle: 1.5 };
 
 export const WARP_DISTANCE = 900;
 export const WARP_DELAY = 3;
-export const BEAM_CHARGE = 5;
+export const BEAM_CHARGE = 2;
 
 export interface ShipState {
   readonly x: number;
@@ -310,7 +310,13 @@ export class Ship extends Entity {
 
   steer(input: Controls, dt: number, world: World, shot: Seq = seq(0)): void {
     if (this.dead) return;
-    const controls = input.boost && this.overheated ? { ...input, boost: false } : input;
+    const beam = this.ability === "gravity" && input.use === true && this.charge > 0;
+    const controls = {
+      ...input,
+      boost: input.boost === true && !this.overheated,
+      left: input.left && !beam,
+      right: input.right && !beam,
+    };
     const next = shipPhysics(this.state, controls, dt, gravityFields(world, this));
     this.pos = new Vector2(next.x, next.y);
     this.vel = new Vector2(next.vx, next.vy);

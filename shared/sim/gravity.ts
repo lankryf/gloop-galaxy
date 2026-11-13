@@ -9,7 +9,7 @@ export interface WellField {
   readonly beam?: { readonly dx: number; readonly dy: number };
 }
 
-export const PULL = { radius: 30, range: 900, strength: 700, width: 60, spread: 0.18 };
+export const PULL = { radius: 30, range: 900, strength: 1600, width: 60, spread: 0.18 };
 
 function beamAt(well: WellField, dx: number, dy: number): number {
   const beam = well.beam;

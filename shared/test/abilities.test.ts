@@ -24,6 +24,19 @@ function press(world: World, ship: Ship) {
 }
 
 describe("abilities", () => {
+  test("a ship cannot turn while its gravity beam is on", () => {
+    const { world, ship } = setup();
+    ship.applyPickup("gravity");
+    ship.controls = { ...IDLE, use: true, left: true };
+    for (let i = 0; i < 15; i++) world.step(dt);
+    expect(ship.angle).toBe(0);
+    expect(BEAM_CHARGE).toBe(2);
+    for (let t = 0; t < BEAM_CHARGE; t += dt) world.step(dt);
+    expect(ship.ability).toBeNull();
+    world.step(dt);
+    expect(ship.angle).toBeLessThan(0);
+  });
+
   test("invisibility lasts 10 seconds", () => {
     const { world, ship } = setup();
     ship.applyPickup("stealth");

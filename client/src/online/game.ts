@@ -208,12 +208,14 @@ export function startOnlineGame({
   const seenShots = new Set<number>();
 
   function readControls(): Controls {
+    const use = input.isDown("KeyE");
+    const beam = use && me?.ability === "gravity" && me.charge > 0;
     return {
       thrust: input.isDown("ArrowUp") || input.isDown("KeyW"),
-      left: input.isDown("ArrowLeft") || input.isDown("KeyA"),
-      right: input.isDown("ArrowRight") || input.isDown("KeyD"),
+      left: !beam && (input.isDown("ArrowLeft") || input.isDown("KeyA")),
+      right: !beam && (input.isDown("ArrowRight") || input.isDown("KeyD")),
       fire: input.isDown("Space"),
-      use: input.isDown("KeyE"),
+      use,
       boost:
         (input.isDown("ShiftLeft") || input.isDown("ShiftRight")) &&
         !(me && me.flags & ShipFlag.overheated),
