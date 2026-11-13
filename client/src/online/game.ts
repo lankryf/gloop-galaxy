@@ -545,7 +545,7 @@ export function startOnlineGame({
           now,
           false,
           sprites,
-          shipFrame(e.id, false, (e.flags & ShipFlag.bot) !== 0),
+          shipFrame(e.id, (e.flags & ShipFlag.bot) !== 0),
           e.heat / 100,
         );
         drawShipHp(ctx, p.x, p.y, e.hp, SHIP.maxHp);
@@ -728,7 +728,7 @@ export function startOnlineGame({
       if (self.flags & ShipFlag.pull) drawPull(ctx, pose, now);
       if (self.flags & ShipFlag.warp) warpCharge(pose, self.charge, now);
       if (self.stealth) ctx.globalAlpha = 0.55;
-      drawShip(ctx, pose, now, true, sprites, "player", self.heat / 100);
+      drawShip(ctx, pose, now, true, sprites, shipFrame(self.id), self.heat / 100);
       ctx.globalAlpha = 1;
       if (self.flags & ShipFlag.shield) drawShield(ctx, pose, sprites);
       drawName(ctx, names.get(myShip) ?? "ти", pose.x, pose.y, true);

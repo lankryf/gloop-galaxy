@@ -481,12 +481,10 @@ export function drawName(ctx: Ctx, name: string, x: number, y: number, own: bool
   ctx.textAlign = "start";
 }
 
-const OTHER_SHIPS = ["other0", "other1", "other2", "other3"] as const;
+export const SHIP_MODELS = 12;
 
-export function shipFrame(id: number, own: boolean, bot = false): string {
-  if (own) return "player";
-  if (bot) return "dummy";
-  return OTHER_SHIPS[id % OTHER_SHIPS.length] ?? "other0";
+export function shipFrame(id: number, dummy = false): string {
+  return dummy ? "dummy" : `ship${id % SHIP_MODELS}`;
 }
 
 export function drawShip(
@@ -495,7 +493,7 @@ export function drawShip(
   time: number,
   own = true,
   sprites: Sprites | null = null,
-  frame = own ? "player" : "dummy",
+  frame = own ? "ship0" : "dummy",
   heat = 0,
 ): void {
   if (sprites?.ships) {

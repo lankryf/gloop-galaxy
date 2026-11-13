@@ -213,7 +213,7 @@ export function startGame({
         now,
         s === ship,
         sprites,
-        shipFrame(s.id, s === ship, s !== ship),
+        shipFrame(s.id, s.name === "dummy"),
         s.heat / HEAT.max,
       );
       if (s !== ship) drawShipHp(ctx, p.x, p.y, s.hp, SHIP.maxHp);
