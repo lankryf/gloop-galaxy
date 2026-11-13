@@ -241,8 +241,8 @@ export function startGame({
         `skill    ${
           ship.warpIn > 0
             ? `warp ${ship.warpIn.toFixed(1)}s`
-            : ship.ability === "gravity"
-              ? `beam ${ship.charge.toFixed(1)}s [hold E]`
+            : ship.beamFor > 0
+              ? `beam ${ship.beamFor.toFixed(1)}s`
               : ship.ability
                 ? `${ship.ability} [E]`
                 : "-"
@@ -266,14 +266,16 @@ export function startGame({
           skill:
             ship.warpIn > 0
               ? `ВАРП через ${ship.warpIn.toFixed(1)} с`
-              : ship.ability
-                ? PICKUP_NAMES[ship.ability]
-                : "скіла немає",
+              : ship.beamFor > 0
+                ? `ПРОМІНЬ ${ship.beamFor.toFixed(1)} с`
+                : ship.ability
+                  ? PICKUP_NAMES[ship.ability]
+                  : "скіла немає",
           skillFraction:
             ship.warpIn > 0
               ? 1 - ship.warpIn / WARP_DELAY
-              : ship.ability === "gravity"
-                ? ship.charge / BEAM_CHARGE
+              : ship.beamFor > 0
+                ? ship.beamFor / BEAM_CHARGE
                 : ship.ability
                   ? 1
                   : 0,

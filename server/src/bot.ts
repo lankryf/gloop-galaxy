@@ -120,7 +120,7 @@ export class Bot implements PlayerInput {
     this.#seq += 1;
     const next: Seq = seq(this.#seq);
     const controls = decide(world, ship, this.rng);
-    const use = controls.use === true && (ship.ability === "gravity" || !this.#used);
+    const use = controls.use === true && !this.#used;
     this.#used = controls.use === true;
     return { seq: next, buttons: packButtons({ ...controls, use }) };
   }

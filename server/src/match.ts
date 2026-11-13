@@ -71,7 +71,7 @@ function snapshotOf(e: AnyEntity): EntitySnap | null {
         score: Math.min(e.score, 0xffff),
         respawn: e.dead ? Math.max(0, Math.ceil(e.respawnIn * 10)) : 0,
         ability: e.ability,
-        charge: Math.min(255, Math.ceil((e.ability === "gravity" ? e.charge : e.warpIn) * 10)),
+        charge: Math.min(255, Math.ceil((e.beamFor > 0 ? e.beamFor : e.warpIn) * 10)),
         heat: Math.min(100, Math.round(e.heat)),
         cooling: e.coolFor > 0,
         stealth: e.effects.has("stealth"),

@@ -163,7 +163,7 @@ export class Ship extends Entity {
   respawnIn = 0;
   readonly effects = new Map<EffectType, number>();
   ability: AbilityType | null = null;
-  charge = 0;
+  beamFor = 0;
   beaming = false;
   warpIn = 0;
   heat = 0;
@@ -216,6 +216,7 @@ export class Ship extends Entity {
     this.effects.clear();
     this.score = 0;
     this.beaming = false;
+    this.beamFor = 0;
     this.warpIn = 0;
     this.heat = 0;
     this.overheated = false;
@@ -237,7 +238,6 @@ export class Ship extends Entity {
   applyPickup(type: PickupType): void {
     if (isAbility(type)) {
       this.ability = type;
-      this.charge = type === "gravity" ? BEAM_CHARGE : 0;
     } else this.effects.set(type, EFFECT_DURATION[type]);
   }
 
@@ -270,6 +270,7 @@ export class Ship extends Entity {
         );
         return;
       case "gravity":
+        this.beamFor = BEAM_CHARGE;
         return;
       case "warp":
         this.warpIn = WARP_DELAY;
@@ -310,7 +311,7 @@ export class Ship extends Entity {
 
   steer(input: Controls, dt: number, world: World, shot: Seq = seq(0)): void {
     if (this.dead) return;
-    const beam = this.ability === "gravity" && input.use === true && this.charge > 0;
+    const beam = this.beamFor > 0;
     const controls = {
       ...input,
       boost: input.boost === true && !this.overheated,
@@ -332,12 +333,12 @@ export class Ship extends Entity {
     if (this.overheated && this.heat <= HEAT.resumeAt) this.overheated = false;
     if (controls.fire && this.cooldown === 0 && !this.overheated) this.fire(world, shot);
     const use = controls.use === true;
-    this.beaming = false;
+    this.beaming = this.beamFor > 0;
+    this.beamFor = Math.max(0, this.beamFor - dt);
     if (this.warpIn > 0) {
       this.warpIn = Math.max(0, this.warpIn - dt);
       if (this.warpIn === 0) this.warp(world);
-    } else if (this.ability === "gravity") this.holdBeam(use, dt, world);
-    else if (use && !this.#usedLast) this.useAbility(world);
+    } else if (use && !this.#usedLast) this.useAbility(world);
     this.#usedLast = use;
   }
 
@@ -347,16 +348,6 @@ export class Ship extends Entity {
     if (this.heat < HEAT.max) return;
     this.heat = HEAT.max;
     this.overheated = true;
-  }
-
-  holdBeam(use: boolean, dt: number, world: World): void {
-    this.beaming = use && this.charge > 0;
-    if (!this.beaming) return;
-    if (!this.#usedLast)
-      world.emit("ability", { shipId: this.id, ability: "gravity", x: this.pos.x, y: this.pos.y });
-    this.charge = Math.max(0, this.charge - dt);
-    if (this.charge > 0) return;
-    this.ability = null;
   }
 
   warp(world: World): void {

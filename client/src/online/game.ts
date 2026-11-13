@@ -91,9 +91,9 @@ function skillOf(ship: ShipSnap): { skill: string; skillFraction: number } {
   const left = ship.charge / 10;
   if (ship.flags & ShipFlag.warp)
     return { skill: `ВАРП через ${left.toFixed(1)} с`, skillFraction: 1 - left / WARP_DELAY };
+  if (ship.flags & ShipFlag.pull)
+    return { skill: `ПРОМІНЬ ${left.toFixed(1)} с`, skillFraction: left / BEAM_CHARGE };
   if (!ship.ability) return { skill: "скіла немає", skillFraction: 0 };
-  if (ship.ability === "gravity")
-    return { skill: `ПРОМІНЬ ${left.toFixed(1)} с [тримай E]`, skillFraction: left / BEAM_CHARGE };
   return { skill: `${PICKUP_NAMES[ship.ability]} [E]`, skillFraction: 1 };
 }
 
@@ -209,7 +209,7 @@ export function startOnlineGame({
 
   function readControls(): Controls {
     const use = input.isDown("KeyE");
-    const beam = use && me?.ability === "gravity" && me.charge > 0;
+    const beam = me !== null && (me.flags & ShipFlag.pull) !== 0;
     return {
       thrust: input.isDown("ArrowUp") || input.isDown("KeyW"),
       left: !beam && (input.isDown("ArrowLeft") || input.isDown("KeyA")),

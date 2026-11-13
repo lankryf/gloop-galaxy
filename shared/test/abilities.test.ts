@@ -27,13 +27,13 @@ describe("abilities", () => {
   test("a ship cannot turn while its gravity beam is on", () => {
     const { world, ship } = setup();
     ship.applyPickup("gravity");
-    ship.controls = { ...IDLE, use: true, left: true };
+    ship.controls = { ...IDLE, use: true };
+    world.step(dt);
+    ship.controls = { ...IDLE, left: true };
     for (let i = 0; i < 15; i++) world.step(dt);
     expect(ship.angle).toBe(0);
     expect(BEAM_CHARGE).toBe(2);
     for (let t = 0; t < BEAM_CHARGE; t += dt) world.step(dt);
-    expect(ship.ability).toBeNull();
-    world.step(dt);
     expect(ship.angle).toBeLessThan(0);
   });
 
@@ -87,7 +87,7 @@ describe("abilities", () => {
     expect(edge.ship.pos.x).toBeLessThan(ARENA.width);
   });
 
-  test("gravity beam pulls only ships, only while the key is held, and runs out after 5 s", () => {
+  test("gravity beam is used once, pulls only ships, cannot be stopped and lasts 2 s", () => {
     const { world, ship } = setup();
     const ahead = world.spawn(new Ship({ pos: new Vector2(1400, 920), name: "ahead" }));
     const behind = world.spawn(new Ship({ pos: new Vector2(300, 900), name: "behind" }));
@@ -109,18 +109,12 @@ describe("abilities", () => {
     expect(pickup.pos.x).toBe(1300);
     expect(rock.vel.length()).toBeLessThan(5);
 
+    expect(ship.ability).toBeNull();
+
     ship.controls = IDLE;
     world.step(dt);
-    expect(ship.beaming).toBe(false);
-    expect(ship.ability).toBe("gravity");
-    const left = ship.charge;
-    for (let i = 0; i < 30; i++) world.step(dt);
-    expect(ship.charge).toBe(left);
-
-    ship.controls = { ...IDLE, use: true };
-    for (let t = 0; t < BEAM_CHARGE; t += dt) world.step(dt);
-    expect(ship.ability).toBeNull();
-    world.step(dt);
+    expect(ship.beaming).toBe(true);
+    for (let t = 0; t < BEAM_CHARGE - 0.4; t += dt) world.step(dt);
     expect(ship.beaming).toBe(false);
   });
 
