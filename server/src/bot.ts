@@ -75,7 +75,8 @@ export function decide(world: World, ship: Ship, rng: Rng): Controls {
   if (threat) {
     const away = angleTo(ship, { dx: -threat.dx, dy: -threat.dy, distance: threat.distance });
     const use = ship.ability === "warp" && Math.abs(away) < 0.4;
-    return { ...steerTo(away, 0.3), thrust: Math.abs(away) < 1.2, fire: false, use };
+    const boost = Math.abs(away) < 0.5 && threat.distance < 260 && ship.heat < 60;
+    return { ...steerTo(away, 0.3), thrust: Math.abs(away) < 1.2, fire: false, use, boost };
   }
 
   const target = prey(world, ship);

@@ -6,7 +6,7 @@ import { DUST, Dust } from "../sim/dust.ts";
 import { MISSILE, Missile } from "../sim/missile.ts";
 import { createRng } from "../sim/random.ts";
 import { ROCKS } from "../sim/rules.ts";
-import { HEAT, IDLE, RADIATOR, SHIP, Ship } from "../sim/ship.ts";
+import { BOOST, HEAT, IDLE, RADIATOR, SHIP, Ship } from "../sim/ship.ts";
 import { Vector2 } from "../sim/vector.ts";
 import { GravityWell } from "../sim/well.ts";
 import { World } from "../sim/world.ts";
@@ -85,9 +85,40 @@ describe("heat", () => {
     world.step(dt);
     expect([...world.ofKind("bullet")].length).toBeLessThanOrEqual(bullets);
     ship.controls = IDLE;
-    for (let i = 0; i < 30 * 4; i++) world.step(dt);
+    for (let i = 0; i < 30 * 5; i++) world.step(dt);
+    expect(ship.overheated).toBe(true);
+    expect(ship.heat).toBeCloseTo(HEAT.max - HEAT.overheatedCooling * 5, 0);
+    for (let i = 0; i < 30 * 6; i++) world.step(dt);
     expect(ship.overheated).toBe(false);
     expect(ship.heat).toBeLessThan(HEAT.resumeAt);
+  });
+
+  test("boost makes the ship faster and heats the gun by 10 per second", () => {
+    const world = new World();
+    const ship = world.spawn(new Ship({ pos: new Vector2(500, 1300), angle: 0 }));
+    ship.controls = { ...IDLE, boost: true };
+    for (let i = 0; i < 30 * 3; i++) world.step(dt);
+    expect(ship.vel.length()).toBeGreaterThan(SHIP.maxSpeed * 1.2);
+    expect(ship.vel.length()).toBeLessThanOrEqual(SHIP.maxSpeed * BOOST.maxSpeed + 1e-6);
+    expect(ship.heat).toBeLessThan(1);
+
+    ship.heat = 50;
+    world.step(dt);
+    expect(ship.heat).toBeCloseTo(50 + (BOOST.heat - HEAT.cooling) * dt, 6);
+
+    ship.controls = IDLE;
+    for (let i = 0; i < 30 * 2; i++) world.step(dt);
+    expect(ship.vel.length()).toBeLessThanOrEqual(SHIP.maxSpeed + 1e-6);
+  });
+
+  test("an overheated ship cannot boost", () => {
+    const world = new World();
+    const ship = world.spawn(new Ship({ pos: new Vector2(500, 1300), angle: 0 }));
+    ship.heat = HEAT.max;
+    ship.overheated = true;
+    ship.controls = { ...IDLE, boost: true };
+    for (let i = 0; i < 30; i++) world.step(dt);
+    expect(ship.vel.length()).toBe(0);
   });
 
   test("radiator dumps the heat and keeps the gun cold for a while", () => {

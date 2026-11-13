@@ -45,7 +45,7 @@ export const ShipFlag = {
   warp: 128,
 };
 
-const BUTTONS: readonly (keyof Controls)[] = ["thrust", "left", "right", "fire", "use"];
+const BUTTONS: readonly (keyof Controls)[] = ["thrust", "left", "right", "fire", "use", "boost"];
 export const MAX_BUTTONS = (1 << BUTTONS.length) - 1;
 
 export function packButtons(input: Controls): number {
@@ -63,6 +63,7 @@ export function unpackButtons(bits: number): Controls {
     right: (bits & 4) !== 0,
     fire: (bits & 8) !== 0,
     use: (bits & 16) !== 0,
+    boost: (bits & 32) !== 0,
   };
 }
 

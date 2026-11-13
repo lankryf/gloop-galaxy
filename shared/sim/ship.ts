@@ -27,7 +27,14 @@ export const SHIP = {
   overhealDecay: 3,
 };
 
-export const HEAT = { max: 100, perShot: 6, perRapidShot: 3.5, cooling: 20, resumeAt: 30 };
+export const HEAT = {
+  max: 100,
+  perShot: 6,
+  perRapidShot: 3.5,
+  cooling: 12,
+  overheatedCooling: 7,
+  resumeAt: 30,
+};
 export const RADIATOR = 6;
 
 export interface Controls {
@@ -36,9 +43,19 @@ export interface Controls {
   readonly right: boolean;
   readonly fire: boolean;
   readonly use?: boolean;
+  readonly boost?: boolean;
 }
 
-export const IDLE: Controls = { thrust: false, left: false, right: false, fire: false, use: false };
+export const IDLE: Controls = {
+  thrust: false,
+  left: false,
+  right: false,
+  fire: false,
+  use: false,
+  boost: false,
+};
+
+export const BOOST = { thrust: 1.9, maxSpeed: 1.5, heat: 10, settle: 1.5 };
 
 export const WARP_DISTANCE = 900;
 export const WARP_DELAY = 3;
@@ -62,19 +79,23 @@ export function integrate(ship: ShipState, input: Controls, dt: number): MovedSh
   const turn = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   angle += turn * SHIP.turnSpeed * dt;
 
-  if (input.thrust) {
-    vx += cos(angle) * SHIP.thrust * dt;
-    vy += sin(angle) * SHIP.thrust * dt;
+  const boost = input.boost === true;
+  const push = boost ? SHIP.thrust * BOOST.thrust : input.thrust ? SHIP.thrust : 0;
+  if (push > 0) {
+    vx += cos(angle) * push * dt;
+    vy += sin(angle) * push * dt;
   }
 
   const damping = Math.max(0, 1 - SHIP.drag * dt);
   vx *= damping;
   vy *= damping;
 
+  const cap = boost ? SHIP.maxSpeed * BOOST.maxSpeed : SHIP.maxSpeed;
   const speed = hypot(vx, vy);
-  if (speed > SHIP.maxSpeed) {
-    vx = (vx / speed) * SHIP.maxSpeed;
-    vy = (vy / speed) * SHIP.maxSpeed;
+  if (speed > cap) {
+    const next = Math.max(cap, speed * (1 - BOOST.settle * dt));
+    vx = (vx / speed) * next;
+    vy = (vy / speed) * next;
   }
 
   x += vx * dt;
@@ -95,7 +116,7 @@ export function integrate(ship: ShipState, input: Controls, dt: number): MovedSh
     if (vy > 0) vy = -vy * SHIP.wallBounce;
   }
 
-  return { x, y, vx, vy, angle, thrust: input.thrust };
+  return { x, y, vx, vy, angle, thrust: input.thrust || boost };
 }
 
 export function quantizeAngle(angle: number): number {
@@ -270,13 +291,7 @@ export class Ship extends Entity {
     const vel = this.vel.add(Vector2.fromAngle(this.angle, BULLET.speed));
     const bullet = new Bullet({ pos: nose, vel, ownerId: this.id, shot });
     world.spawn(bullet);
-    if (this.coolFor <= 0) {
-      this.heat += this.effects.has("rapid") ? HEAT.perRapidShot : HEAT.perShot;
-      if (this.heat >= HEAT.max) {
-        this.heat = HEAT.max;
-        this.overheated = true;
-      }
-    }
+    this.addHeat(this.effects.has("rapid") ? HEAT.perRapidShot : HEAT.perShot);
     world.emit("fired", { shipId: this.id, x: nose.x, y: nose.y });
     this.cooldown = this.effects.has("rapid") ? SHIP.rapidCooldown : SHIP.fireCooldown;
   }
@@ -293,8 +308,9 @@ export class Ship extends Entity {
     if (this.respawnIn <= 0) this.respawn(world);
   }
 
-  steer(controls: Controls, dt: number, world: World, shot: Seq = seq(0)): void {
+  steer(input: Controls, dt: number, world: World, shot: Seq = seq(0)): void {
     if (this.dead) return;
+    const controls = input.boost && this.overheated ? { ...input, boost: false } : input;
     const next = shipPhysics(this.state, controls, dt, gravityFields(world, this));
     this.pos = new Vector2(next.x, next.y);
     this.vel = new Vector2(next.vx, next.vy);
@@ -302,8 +318,10 @@ export class Ship extends Entity {
     this.thrust = next.thrust;
 
     this.cooldown = Math.max(0, this.cooldown - dt);
-    this.heat = Math.max(0, this.heat - HEAT.cooling * dt);
+    const cooling = this.overheated ? HEAT.overheatedCooling : HEAT.cooling;
+    this.heat = Math.max(0, this.heat - cooling * dt);
     if (this.overheated && this.heat <= HEAT.resumeAt) this.overheated = false;
+    if (controls.boost) this.addHeat(BOOST.heat * dt);
     if (controls.fire && this.cooldown === 0 && !this.overheated) this.fire(world, shot);
     const use = controls.use === true;
     this.beaming = false;
@@ -313,6 +331,14 @@ export class Ship extends Entity {
     } else if (this.ability === "gravity") this.holdBeam(use, dt, world);
     else if (use && !this.#usedLast) this.useAbility(world);
     this.#usedLast = use;
+  }
+
+  addHeat(amount: number): void {
+    if (this.coolFor > 0) return;
+    this.heat += amount;
+    if (this.heat < HEAT.max) return;
+    this.heat = HEAT.max;
+    this.overheated = true;
   }
 
   holdBeam(use: boolean, dt: number, world: World): void {
