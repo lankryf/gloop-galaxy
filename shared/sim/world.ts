@@ -49,6 +49,7 @@ export type WorldEvents = {
     readonly shipId?: EntityId;
   };
   collapsed: { readonly x: number; readonly y: number; readonly range: number };
+  formed: { readonly x: number; readonly y: number; readonly radius: number };
   warped: {
     readonly shipId: EntityId;
     readonly x: number;

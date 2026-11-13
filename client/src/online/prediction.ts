@@ -28,14 +28,15 @@ export function pullAt(x: number, y: number, angle: number): MovingWell {
 
 export function toWellField(e: WellSnap): MovingWell {
   const config = WELLS[e.type];
+  const k = e.radius / config.radius;
   return {
     x: e.x,
     y: e.y,
     vx: e.vx,
     vy: e.vy,
-    radius: config.radius,
-    range: config.range,
-    strength: config.strength,
+    radius: e.radius,
+    range: config.range * k,
+    strength: config.strength * k * k * k,
   };
 }
 

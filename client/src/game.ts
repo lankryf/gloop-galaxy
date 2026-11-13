@@ -3,14 +3,21 @@ import { populate } from "@gloop/shared/arenas.ts";
 import { ARENA } from "@gloop/shared/sim/arena.ts";
 import { MISSILE } from "@gloop/shared/sim/missile.ts";
 import type { Controls } from "@gloop/shared/sim/ship.ts";
-import { Ship, WARP_DELAY, WARP_DISTANCE } from "@gloop/shared/sim/ship.ts";
+import {
+  BEAM_CHARGE,
+  HEAT,
+  SHIP,
+  Ship,
+  WARP_DELAY,
+  WARP_DISTANCE,
+} from "@gloop/shared/sim/ship.ts";
 import { Vector2 } from "@gloop/shared/sim/vector.ts";
 import { World } from "@gloop/shared/sim/world.ts";
 import type { Theme } from "./assets/manifest.ts";
 import type { Audio } from "./audio.ts";
 import type { GameExperiment } from "./experiments.ts";
 import type { Hud } from "./hud.ts";
-import { createHud } from "./hud.ts";
+import { createHud, PICKUP_NAMES } from "./hud.ts";
 import type { Input } from "./input.ts";
 import type { Loop, LoopStats } from "./loop.ts";
 import { createLoop } from "./loop.ts";
@@ -22,6 +29,7 @@ import {
   drawAsteroid,
   drawBullet,
   drawCachedBackground,
+  drawDust,
   drawExplosion,
   drawHud,
   drawMissile,
@@ -29,6 +37,8 @@ import {
   drawPull,
   drawShield,
   drawShip,
+  drawShipHp,
+  drawStatus,
   drawWell,
   interpolate,
   interpolateShip,
@@ -142,6 +152,11 @@ export function startGame({
       if (!camera.place(p.x, p.y, 520)) continue;
       drawWell(ctx, w, p, now, sprites);
     }
+    for (const d of world.ofKind("dust")) {
+      const p = interpolate(d, alpha);
+      if (!camera.place(p.x, p.y)) continue;
+      drawDust(ctx, p, d.id, now, sprites);
+    }
     for (const p of world.ofKind("pickup")) {
       if (!camera.place(p.pos.x, p.pos.y)) continue;
       drawPickup(ctx, p, sprites);
@@ -173,7 +188,16 @@ export function startGame({
       if (s.beaming) drawPull(ctx, p, now);
       if (s.warpIn > 0)
         drawWarpCharge(ctx, p.x, p.y, p.angle, 1 - s.warpIn / WARP_DELAY, WARP_DISTANCE, now);
-      drawShip(ctx, p, now, s === ship, sprites, shipFrame(s.id, s === ship, s !== ship));
+      drawShip(
+        ctx,
+        p,
+        now,
+        s === ship,
+        sprites,
+        shipFrame(s.id, s === ship, s !== ship),
+        s.heat / HEAT.max,
+      );
+      if (s !== ship) drawShipHp(ctx, p.x, p.y, s.hp, SHIP.maxHp);
       if (s.effects.has("shield")) drawShield(ctx, p, sprites);
     }
     for (const e of world.ofKind("explosion")) {
@@ -208,6 +232,35 @@ export function startGame({
       experiment.name ? `exp      ${experiment.name}` : "",
     ]);
     hud.drawScreen(ctx, view);
+    if (!ship.dead) {
+      drawStatus(
+        ctx,
+        view,
+        {
+          hp: ship.hp,
+          maxHp: SHIP.maxHp,
+          overheal: SHIP.maxHp * SHIP.overheal,
+          heat: ship.heat,
+          overheated: ship.overheated,
+          cooling: ship.coolFor > 0,
+          skill:
+            ship.warpIn > 0
+              ? `ВАРП через ${ship.warpIn.toFixed(1)} с`
+              : ship.ability
+                ? PICKUP_NAMES[ship.ability]
+                : "скіла немає",
+          skillFraction:
+            ship.warpIn > 0
+              ? 1 - ship.warpIn / WARP_DELAY
+              : ship.ability === "gravity"
+                ? ship.charge / BEAM_CHARGE
+                : ship.ability
+                  ? 1
+                  : 0,
+        },
+        now,
+      );
+    }
   }
 
   const loop = createLoop({

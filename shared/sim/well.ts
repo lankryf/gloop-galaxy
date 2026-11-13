@@ -47,12 +47,26 @@ export class GravityWell extends Entity {
   mass = 0;
   entered = false;
 
-  constructor({ pos, vel = new Vector2(), type }: { pos: Vector2; vel?: Vector2; type: WellType }) {
+  home: Vector2 | null = null;
+
+  constructor({
+    pos,
+    vel = new Vector2(),
+    type,
+    radius,
+  }: {
+    pos: Vector2;
+    vel?: Vector2;
+    type: WellType;
+    radius?: number;
+  }) {
     const config = WELLS[type];
-    super({ pos, vel, radius: config.radius });
+    const size = radius ?? config.radius;
+    const k = size / config.radius;
+    super({ pos, vel, radius: size });
     this.type = type;
-    this.range = config.range;
-    this.strength = config.strength;
+    this.range = config.range * k;
+    this.strength = config.strength * k * k * k;
     this.solid = config.solid;
     this.spin = config.spin;
     this.capacity = config.capacity;
@@ -87,7 +101,10 @@ export class GravityWell extends Entity {
   }
 
   static planet({ x, y }: PlanetPlacement, arena: ArenaSize = ARENA): GravityWell {
-    return new GravityWell({ type: "planet", pos: new Vector2(x * arena.width, y * arena.height) });
+    const pos = new Vector2(x * arena.width, y * arena.height);
+    const planet = new GravityWell({ type: "planet", pos });
+    planet.home = pos;
+    return planet;
   }
 
   static incoming(rng: Rng, arena: ArenaSize = ARENA, extraDistance = 0): GravityWell {

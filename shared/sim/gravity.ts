@@ -101,7 +101,7 @@ export function applyGravity(world: World, dt: number): void {
         ? all
         : entity.kind === "bullet"
           ? natural
-          : entity.kind === "pickup"
+          : entity.kind === "pickup" || entity.kind === "dust"
             ? pulls
             : null;
     if (!fields || fields.length === 0) continue;

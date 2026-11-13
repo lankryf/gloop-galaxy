@@ -5,7 +5,7 @@ import { Asteroid } from "../sim/asteroid.ts";
 import { MISSILE, Missile } from "../sim/missile.ts";
 import { Pickup } from "../sim/pickup.ts";
 import { createRng } from "../sim/random.ts";
-import { BEAM_CHARGE, IDLE, SHIP, Ship, WARP_DELAY, WARP_DISTANCE } from "../sim/ship.ts";
+import { BEAM_CHARGE, IDLE, Ship, WARP_DELAY, WARP_DISTANCE } from "../sim/ship.ts";
 import { Vector2 } from "../sim/vector.ts";
 import { World } from "../sim/world.ts";
 
@@ -69,7 +69,7 @@ describe("abilities", () => {
     const { world, ship } = setup();
     const ahead = world.spawn(new Pickup({ pos: new Vector2(1300, 920), type: "rapid" }));
     const behind = world.spawn(new Pickup({ pos: new Vector2(500, 900), type: "shield" }));
-    const aside = world.spawn(new Pickup({ pos: new Vector2(800, 1200), type: "homing" }));
+    const aside = world.spawn(new Pickup({ pos: new Vector2(800, 1200), type: "radiator" }));
     ship.applyPickup("gravity");
     ship.controls = { ...IDLE, use: true };
     for (let i = 0; i < 15; i++) world.step(dt);
@@ -139,9 +139,5 @@ describe("abilities", () => {
     enemy.controls = { ...IDLE, thrust: true };
     for (let i = 0; i < 30 * 6; i++) world.step(dt);
     expect(enemy.hp).toBe(100);
-  });
-
-  test("missile is slower than a ship at full speed", () => {
-    expect(MISSILE.homing.speed).toBeLessThan(SHIP.maxSpeed);
   });
 });

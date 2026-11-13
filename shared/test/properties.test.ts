@@ -39,6 +39,8 @@ const entity: fc.Arbitrary<EntitySnap> = fc.oneof(
     score: fc.integer({ min: 0, max: 0xffff }),
     respawn: fc.integer({ min: 0, max: 255 }),
     charge: fc.integer({ min: 0, max: 255 }),
+    heat: fc.integer({ min: 0, max: 100 }),
+    cooling: fc.boolean(),
     ability: fc.option(fc.constantFrom(...ABILITY_TYPES), { nil: null }),
   }),
   fc.record({
@@ -87,7 +89,9 @@ const entity: fc.Arbitrary<EntitySnap> = fc.oneof(
     angle,
     type: fc.constantFrom(...WELL_TYPES),
     mass: fc.integer({ min: 0, max: 0xffff }),
+    radius: fc.integer({ min: 0, max: 255 }),
   }),
+  fc.record({ kind: fc.constant("dust" as const), id, x: coord, y: coord }),
 );
 
 const shipRef: fc.Arbitrary<EntityId | null> = fc.option(id, { nil: null });
@@ -134,6 +138,12 @@ const event: fc.Arbitrary<NetEvent> = fc.oneof(
     range: fc.integer({ min: 0, max: 0xffff }),
   }),
   fc.record({
+    type: fc.constant("formed" as const),
+    x: coord,
+    y: coord,
+    radius: fc.integer({ min: 0, max: 255 }),
+  }),
+  fc.record({
     type: fc.constant("warped" as const),
     x: coord,
     y: coord,
@@ -157,12 +167,13 @@ const snapshot: fc.Arbitrary<Snapshot> = fc.record({
 });
 
 const SIZE: Record<EntitySnap["kind"], number> = {
-  ship: 28,
+  ship: 29,
   bullet: 25,
   asteroid: 15,
   pickup: 12,
-  well: 24,
+  well: 25,
   missile: 22,
+  dust: 11,
 };
 const close = (a: number, b: number, eps: number) =>
   Math.abs(a - b) <= eps * Math.max(1, Math.abs(b));

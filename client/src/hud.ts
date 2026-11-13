@@ -19,11 +19,11 @@ interface Message {
 export const PICKUP_NAMES: Readonly<Record<PickupType, string>> = {
   shield: "ЩИТ",
   rapid: "ШВИДКИЙ ВОГОНЬ",
-  homing: "САМОНАВЕДЕННЯ",
   missile: "РАКЕТА",
   nuke: "ЯДЕРНА БОМБА",
   gravity: "ГРАВІТАЦІЙНЕ ПРИТЯГУВАННЯ",
   warp: "ВАРП-СТРИБОК",
+  radiator: "РАДІАТОР",
 };
 
 export interface Hud {

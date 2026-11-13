@@ -23,6 +23,8 @@ const snapshot: Snapshot = {
       respawn: 0,
       ability: null,
       charge: 0,
+      heat: 42,
+      cooling: true,
     },
     {
       kind: "bullet",
@@ -43,7 +45,7 @@ const snapshot: Snapshot = {
       radius: 54,
       hunter: true,
     },
-    { kind: "pickup", id: entityId(4), x: 400, y: 300, type: "homing" },
+    { kind: "pickup", id: entityId(4), x: 400, y: 300, type: "radiator" },
     {
       kind: "well",
       id: entityId(5),
@@ -54,6 +56,7 @@ const snapshot: Snapshot = {
       angle: 1.25,
       type: "blackhole",
       mass: 297,
+      radius: 40,
     },
   ],
   events: [
@@ -97,7 +100,7 @@ test("input round trip and validation", () => {
   assert.equal(new Uint8Array(binary.encodeInput(inputs))[0], binary.MessageType.input);
   assert.throws(() => binary.decodeInput(new Uint8Array([1, 1, 5, 0])), binary.CodecError);
   assert.throws(() => binary.decodeInput(new Uint8Array([1, 9, 1, 0, 0, 0, 0, 0])), /version/);
-  assert.throws(() => binary.decodeInput(new Uint8Array([1, 3, 1, 0, 0, 0, 0, 99])), /buttons/);
+  assert.throws(() => binary.decodeInput(new Uint8Array([1, 4, 1, 0, 0, 0, 0, 99])), /buttons/);
 });
 
 test("truncated or garbage snapshots throw instead of returning junk", () => {

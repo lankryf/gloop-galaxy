@@ -56,7 +56,7 @@ describe("World", () => {
     world.spawn(new Ship({ pos: new Vector2(10, 10) }));
     const dead = world.spawn(new Ship({ pos: new Vector2(500, 500) }));
     dead.alive = false;
-    world.spawn(new Pickup({ pos: new Vector2(), type: "homing" }));
+    world.spawn(new Pickup({ pos: new Vector2(), type: "radiator" }));
     expect([...world.ofKind("ship")]).toHaveLength(1);
     expect([...world.ofKind("pickup")]).toHaveLength(1);
   });

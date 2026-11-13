@@ -22,6 +22,8 @@ function sampleSnapshot(ships = 5, bullets = 12, asteroids = 6): Snapshot {
       respawn: 0,
       ability: null,
       charge: 0,
+      heat: 0,
+      cooling: false,
     });
   }
   for (let i = 0; i < bullets; i++) {
@@ -58,6 +60,7 @@ function sampleSnapshot(ships = 5, bullets = 12, asteroids = 6): Snapshot {
     angle: 2.5,
     type: "blackhole",
     mass: 250,
+    radius: 40,
   });
   return {
     tick: tick(12345),

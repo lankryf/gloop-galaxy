@@ -18,7 +18,7 @@ import { gravityAt } from "@gloop/shared/sim/gravity.ts";
 import { MISSILE } from "@gloop/shared/sim/missile.ts";
 import { createRng } from "@gloop/shared/sim/random.ts";
 import type { Controls, MovedShip } from "@gloop/shared/sim/ship.ts";
-import { SHIP, WARP_DELAY, WARP_DISTANCE } from "@gloop/shared/sim/ship.ts";
+import { BEAM_CHARGE, SHIP, WARP_DELAY, WARP_DISTANCE } from "@gloop/shared/sim/ship.ts";
 import { Vector2 } from "@gloop/shared/sim/vector.ts";
 import { WELLS } from "@gloop/shared/sim/well.ts";
 import type { Theme } from "../assets/manifest.ts";
@@ -35,11 +35,12 @@ import { measure, measures, Samples } from "../perf.ts";
 import { Blast, drawBlast, drawWarpCharge } from "../render/blast.ts";
 import { Camera } from "../render/camera.ts";
 import type { View } from "../render/canvas.ts";
-import type { ShipPose, Sprites } from "../render/draw.ts";
+import type { ShipPose, Sprites, Status } from "../render/draw.ts";
 import {
   drawAsteroid,
   drawBullet,
   drawCachedBackground,
+  drawDust,
   drawExplosion,
   drawMissile,
   drawName,
@@ -47,6 +48,8 @@ import {
   drawPull,
   drawShield,
   drawShip,
+  drawShipHp,
+  drawStatus,
   drawWell,
   hudLines,
   lerp,
@@ -64,6 +67,7 @@ import { WorkerDecoder } from "./worker-decoder.ts";
 const REDUNDANCY = 3;
 const DRAW_ORDER: readonly EntitySnap["kind"][] = [
   "well",
+  "dust",
   "pickup",
   "asteroid",
   "bullet",
@@ -78,12 +82,26 @@ const isFinished = (e: { readonly alive: boolean }) => !e.alive;
 const isExpired = (e: { readonly ttl: number }) => e.ttl <= 0;
 const isDone = (b: Blast) => b.done;
 
-function skillLine(ship: ShipSnap | null): string {
-  if (!ship) return "-";
-  if (ship.flags & ShipFlag.warp) return `варп через ${(ship.charge / 10).toFixed(1)} с`;
-  if (!ship.ability) return "-";
-  if (ship.ability === "gravity") return `промінь ${(ship.charge / 10).toFixed(1)} с [тримай E]`;
-  return `${PICKUP_NAMES[ship.ability].toLowerCase()} [E]`;
+function skillOf(ship: ShipSnap): { skill: string; skillFraction: number } {
+  const left = ship.charge / 10;
+  if (ship.flags & ShipFlag.warp)
+    return { skill: `ВАРП через ${left.toFixed(1)} с`, skillFraction: 1 - left / WARP_DELAY };
+  if (!ship.ability) return { skill: "скіла немає", skillFraction: 0 };
+  if (ship.ability === "gravity")
+    return { skill: `ПРОМІНЬ ${left.toFixed(1)} с [тримай E]`, skillFraction: left / BEAM_CHARGE };
+  return { skill: `${PICKUP_NAMES[ship.ability]} [E]`, skillFraction: 1 };
+}
+
+function statusOf(ship: ShipSnap): Status {
+  return {
+    hp: ship.hp,
+    maxHp: SHIP.maxHp,
+    overheal: SHIP.maxHp * SHIP.overheal,
+    heat: ship.heat,
+    overheated: (ship.flags & ShipFlag.overheated) !== 0,
+    cooling: ship.cooling,
+    ...skillOf(ship),
+  };
 }
 
 interface LocalBullet {
@@ -247,6 +265,18 @@ export function startOnlineGame({
         blasts.push(new Blast(ev.x, ev.y, ev.range, "collapse", Math.random));
         audio?.play("explosion", { volume: 1, rate: 0.3 });
         return;
+      case "formed":
+        explosions.push(
+          explosionPool.acquire().reset({
+            pos: new Vector2(ev.x, ev.y),
+            rng,
+            size: ev.radius / 30,
+            color: "#c98b5a",
+          }),
+        );
+        popup("НОВА ПЛАНЕТА!", ev.x, ev.y, 2);
+        audio?.play("explosion", { volume: 0.8, rate: 0.5 });
+        return;
       case "warped":
         blasts.push(new Blast(ev.x, ev.y, 140, ev.arrive ? "warpIn" : "warpOut", Math.random));
         if (ev.arrive)
@@ -365,7 +395,7 @@ export function startOnlineGame({
     if (options.prediction && isAlive(me)) {
       predictor.apply(entry, wells);
       cooldown = Math.max(0, cooldown - TICK_DT);
-      if (controls.fire && cooldown === 0 && predictor.state) {
+      if (controls.fire && cooldown === 0 && predictor.state && !(me.flags & ShipFlag.overheated)) {
         spawnLocalBullet(predictor.state, entry.seq);
         cooldown = me.flags & ShipFlag.rapid ? SHIP.rapidCooldown : SHIP.fireCooldown;
       }
@@ -446,8 +476,8 @@ export function startOnlineGame({
           {
             id: e.id,
             type: e.type,
-            range: config.range,
-            radius: config.radius,
+            range: (config.range * e.radius) / config.radius,
+            radius: e.radius,
             mass: e.mass / 10,
             capacity: config.capacity,
           },
@@ -495,7 +525,9 @@ export function startOnlineGame({
           false,
           sprites,
           shipFrame(e.id, false, (e.flags & ShipFlag.bot) !== 0),
+          e.heat / 100,
         );
+        drawShipHp(ctx, p.x, p.y, e.hp, SHIP.maxHp);
         if (e.flags & ShipFlag.shield) drawShield(ctx, p, sprites);
         drawName(
           ctx,
@@ -506,6 +538,9 @@ export function startOnlineGame({
         );
         return;
       }
+      case "dust":
+        drawDust(ctx, e, e.id, now, sprites);
+        return;
       default:
         assertNever(e);
     }
@@ -525,7 +560,6 @@ export function startOnlineGame({
     const effects: string[] = [];
     if (self && self.flags & ShipFlag.shield) effects.push("щит");
     if (self && self.flags & ShipFlag.rapid) effects.push("вогонь");
-    if (self && self.flags & ShipFlag.homing) effects.push("наведення");
     if (self && self.flags & ShipFlag.pull) effects.push("притягування");
     const scores = entities
       .filter((e) => e.kind === "ship")
@@ -533,17 +567,13 @@ export function startOnlineGame({
       .sort((a, b) => b.score - a.score)
       .slice(0, 5)
       .map((e) => `${(names.get(e.id) ?? "?").padEnd(10).slice(0, 10)} ${e.score}`);
-    const hp = !self
-      ? "-"
-      : self.flags & ShipFlag.dead
-        ? `0 (respawn ${(self.respawn / 10).toFixed(1)}s)`
-        : `${self.hp}`;
+    const respawn =
+      self && self.flags & ShipFlag.dead ? `respawn  ${(self.respawn / 10).toFixed(1)} s` : "";
     return hudLines(stats, [
       `build    ${__APP_VERSION__} ${__COMMIT__}`,
       `tick     ${buffer.latest?.tick ?? 0}`,
-      `hp       ${hp}`,
       `effects  ${effects.join(", ") || "-"}`,
-      `skill    ${skillLine(self)}`,
+      respawn,
       "",
       ...scores,
     ]);
@@ -580,12 +610,25 @@ export function startOnlineGame({
           minimap.dot(ctx, e, e.type === "nuke" ? 3 : 2, "#ff4f4f");
           break;
         case "bullet":
+        case "dust":
           break;
         default:
           assertNever(e);
       }
     }
     if (pose) minimap.dot(ctx, pose, 3.5, "#8dff3a");
+    const self = me;
+    if (pose && self && self.flags & ShipFlag.warp) {
+      minimap.target(
+        ctx,
+        pose,
+        {
+          x: pose.x + Math.cos(pose.angle) * WARP_DISTANCE,
+          y: pose.y + Math.sin(pose.angle) * WARP_DISTANCE,
+        },
+        performance.now(),
+      );
+    }
     minimap.viewport(ctx, camera);
   }
 
@@ -621,7 +664,7 @@ export function startOnlineGame({
     if (isAlive(self) && pose) {
       if (self.flags & ShipFlag.pull) drawPull(ctx, pose, now);
       if (self.flags & ShipFlag.warp) warpCharge(pose, self.charge, now);
-      drawShip(ctx, pose, now, true, sprites);
+      drawShip(ctx, pose, now, true, sprites, "player", self.heat / 100);
       if (self.flags & ShipFlag.shield) drawShield(ctx, pose, sprites);
       drawName(ctx, names.get(myShip) ?? "ти", pose.x, pose.y, true);
     }
@@ -662,6 +705,7 @@ export function startOnlineGame({
     ctx.fillRect(10, 10, hud.style.width, hud.height + 10);
     hud.draw(ctx, 10, 10);
     drawMinimap(sampled.entities, pose);
+    if (isAlive(self)) drawStatus(ctx, view, statusOf(self), now);
     if (options.netgraph) netgraph.draw(ctx, view);
   }
 

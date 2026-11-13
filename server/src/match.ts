@@ -49,7 +49,7 @@ function flagsOf(ship: Ship): number {
   if (ship.dead) flags |= ShipFlag.dead;
   if (ship.effects.has("shield")) flags |= ShipFlag.shield;
   if (ship.effects.has("rapid")) flags |= ShipFlag.rapid;
-  if (ship.effects.has("homing")) flags |= ShipFlag.homing;
+  if (ship.overheated) flags |= ShipFlag.overheated;
   if (ship.beaming) flags |= ShipFlag.pull;
   if (ship.warpIn > 0) flags |= ShipFlag.warp;
   if (!ship.inputDriven) flags |= ShipFlag.bot;
@@ -66,12 +66,14 @@ function snapshotOf(e: AnyEntity): EntitySnap | null {
         vx: e.vel.x,
         vy: e.vel.y,
         angle: e.angle,
-        hp: e.hp,
+        hp: Math.min(255, Math.ceil(e.hp)),
         flags: flagsOf(e),
         score: Math.min(e.score, 0xffff),
         respawn: e.dead ? Math.max(0, Math.ceil(e.respawnIn * 10)) : 0,
         ability: e.ability,
         charge: Math.min(255, Math.ceil((e.ability === "gravity" ? e.charge : e.warpIn) * 10)),
+        heat: Math.min(100, Math.round(e.heat)),
+        cooling: e.coolFor > 0,
       };
     case "missile":
       return { ...base, kind: "missile", vx: e.vel.x, vy: e.vel.y, owner: e.ownerId, type: e.type };
@@ -96,7 +98,10 @@ function snapshotOf(e: AnyEntity): EntitySnap | null {
         angle: e.angle,
         type: e.type,
         mass: Math.min(0xffff, Math.round(e.mass * 10)),
+        radius: Math.min(255, Math.round(e.radius)),
       };
+    case "dust":
+      return { ...base, kind: "dust" };
     case "explosion":
       return null;
     default:
@@ -163,6 +168,7 @@ export class Match {
       push({ type: "swallowed", x: d.x, y: d.y, what: d.kind, shipId: d.shipId ?? null }),
     );
     events.on("collapsed", (d) => push({ type: "collapsed", x: d.x, y: d.y, range: d.range }));
+    events.on("formed", (d) => push({ type: "formed", x: d.x, y: d.y, radius: d.radius }));
     events.on("warped", (d) =>
       push({ type: "warped", x: d.x, y: d.y, shipId: d.shipId, arrive: d.arrive }),
     );

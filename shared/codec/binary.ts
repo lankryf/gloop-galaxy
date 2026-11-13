@@ -18,6 +18,7 @@ const KIND_CODE: Readonly<Record<EntitySnap["kind"], number>> = {
   pickup: 4,
   well: 5,
   missile: 6,
+  dust: 7,
 };
 const EVENT_CODE: Readonly<Record<NetEvent["type"], number>> = {
   fired: 1,
@@ -29,6 +30,7 @@ const EVENT_CODE: Readonly<Record<NetEvent["type"], number>> = {
   collapsed: 7,
   ability: 8,
   warped: 9,
+  formed: 10,
 };
 const SWALLOWED: readonly ["bullet", "asteroid", "ship"] = ["bullet", "asteroid", "ship"];
 const ANGLE_SCALE = 10000;
@@ -36,12 +38,13 @@ const HEADER = 12;
 const COMMON = 11;
 const EVENT_SIZE = 12;
 const SIZE: Readonly<Record<EntitySnap["kind"], number>> = {
-  ship: COMMON + 17,
+  ship: COMMON + 18,
   bullet: COMMON + 14,
   asteroid: COMMON + 4,
   pickup: COMMON + 1,
-  well: COMMON + 13,
+  well: COMMON + 14,
   missile: COMMON + 11,
+  dust: COMMON,
 };
 export const ACK_OFFSET = 6;
 
@@ -112,6 +115,11 @@ function missileAt(index: number): MissileType {
   return type;
 }
 
+function heatAt(value: number): number {
+  if (value > 100) throw new CodecError(`bad heat ${value}`);
+  return value;
+}
+
 function wellAt(index: number): WellType {
   const type = WELL_TYPES[index];
   if (type === undefined) throw new CodecError(`bad well type ${index}`);
@@ -174,6 +182,7 @@ function writeEntity(view: DataView, o: number, e: EntitySnap): number {
       view.setUint8(p + 14, e.respawn);
       view.setUint8(p + 15, e.ability === null ? 0 : ABILITY_TYPES.indexOf(e.ability) + 1);
       view.setUint8(p + 16, e.charge);
+      view.setUint8(p + 17, e.heat | (e.cooling ? 128 : 0));
       break;
     case "missile":
       view.setFloat32(p, e.vx, true);
@@ -201,6 +210,9 @@ function writeEntity(view: DataView, o: number, e: EntitySnap): number {
       view.setInt16(p + 8, angleToInt(e.angle), true);
       view.setUint8(p + 10, WELL_TYPES.indexOf(e.type));
       view.setUint16(p + 11, e.mass, true);
+      view.setUint8(p + 13, e.radius);
+      break;
+    case "dust":
       break;
     default:
       return assertNever(e);
@@ -226,6 +238,8 @@ function eventFields(ev: NetEvent): [number, number] {
       return [Math.min(0xffff, Math.round(ev.range)), 0];
     case "warped":
       return [ev.shipId, ev.arrive ? 1 : 0];
+    case "formed":
+      return [0, Math.min(255, Math.round(ev.radius))];
     case "ability":
       return [ev.shipId, ABILITY_TYPES.indexOf(ev.ability)];
     default:
@@ -276,6 +290,8 @@ function kindAt(code: number): EntitySnap["kind"] {
       return "well";
     case 6:
       return "missile";
+    case 7:
+      return "dust";
     default:
       throw new CodecError(`unknown kind ${code}`);
   }
@@ -304,6 +320,8 @@ function readEntity(view: DataView, o: number): EntitySnap {
         respawn: view.getUint8(p + 14),
         ability: abilityOrNull(view.getUint8(p + 15)),
         charge: view.getUint8(p + 16),
+        heat: heatAt(view.getUint8(p + 17) & 127),
+        cooling: (view.getUint8(p + 17) & 128) !== 0,
       };
     case "missile":
       return {
@@ -350,7 +368,10 @@ function readEntity(view: DataView, o: number): EntitySnap {
         angle: view.getInt16(p + 8, true) / ANGLE_SCALE,
         type: wellAt(view.getUint8(p + 10)),
         mass: view.getUint16(p + 11, true),
+        radius: view.getUint8(p + 13),
       };
+    case "dust":
+      return { kind, id, x, y };
     default:
       return assertNever(kind);
   }
@@ -382,6 +403,8 @@ function readEvent(view: DataView, o: number): NetEvent {
       return { type: "swallowed", x, y, what: swallowedAt(b), shipId: readOptionalId(view, o + 9) };
     case EVENT_CODE.collapsed:
       return { type: "collapsed", x, y, range: view.getUint16(o + 9, true) };
+    case EVENT_CODE.formed:
+      return { type: "formed", x, y, radius: b };
     case EVENT_CODE.warped:
       return { type: "warped", x, y, shipId: readId(view, o + 9), arrive: b === 1 };
     case EVENT_CODE.ability:

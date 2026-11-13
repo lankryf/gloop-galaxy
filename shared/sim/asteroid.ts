@@ -8,6 +8,10 @@ import type { World } from "./world.ts";
 
 export const ASTEROID_FIELD = { spawnGap: 40, lostAfter: 1400 };
 
+export function replaceAsteroid(world: World, delay = world.rng.range(0.5, 2.5)): void {
+  world.later(delay, (w) => w.spawn(Asteroid.incoming(w.rng, ARENA)));
+}
+
 export class Asteroid extends Entity {
   readonly kind = "asteroid";
   readonly spin: number;
@@ -15,6 +19,7 @@ export class Asteroid extends Entity {
   hp: number;
   hunter = false;
   entered = false;
+  fragment = false;
 
   constructor({ pos, vel, radius, rng }: { pos: Vector2; vel: Vector2; radius: number; rng: Rng }) {
     super({ pos, vel, radius });
@@ -33,7 +38,7 @@ export class Asteroid extends Entity {
       : outside(x, y, ASTEROID_FIELD.lostAfter);
     if (!gone) return;
     this.alive = false;
-    world.later(world.rng.range(0.5, 2.5), (w) => w.spawn(Asteroid.incoming(w.rng, ARENA)));
+    if (!this.fragment) replaceAsteroid(world);
   }
 
   static incoming(rng: Rng, arena: ArenaSize, extraDistance = 0): Asteroid {

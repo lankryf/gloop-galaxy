@@ -236,6 +236,147 @@ export function drawSprite(
   ctx.restore();
 }
 
+const HOT = "#ff2a10";
+const tinted = new Map<string, HTMLCanvasElement>();
+
+function tintedFrame(sheet: SpriteSheet, name: string, color: string): HTMLCanvasElement | null {
+  const key = `${name}|${color}`;
+  const cached = tinted.get(key);
+  if (cached) return cached;
+  const frame = sheet.frames[name];
+  if (!frame) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = frame[2];
+  canvas.height = frame[3];
+  const c = canvas.getContext("2d");
+  if (!c) return null;
+  c.drawImage(sheet.image, frame[0], frame[1], frame[2], frame[3], 0, 0, frame[2], frame[3]);
+  c.globalCompositeOperation = "source-atop";
+  c.fillStyle = color;
+  c.fillRect(0, 0, frame[2], frame[3]);
+  tinted.set(key, canvas);
+  return canvas;
+}
+
+function drawTinted(
+  ctx: Ctx,
+  sheet: SpriteSheet,
+  name: string,
+  p: Pose,
+  color: string,
+  alpha: number,
+): void {
+  const image = tintedFrame(sheet, name, color);
+  if (!image) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.angle);
+  ctx.drawImage(image, -image.width / 2, -image.height / 2);
+  ctx.restore();
+}
+
+export function drawDust(
+  ctx: Ctx,
+  p: Point,
+  id: number,
+  time: number,
+  sprites: Sprites | null,
+): void {
+  const sheet = sprites?.items;
+  const spin = time / 400 + id;
+  if (sheet) {
+    drawSprite(ctx, sheet, id % 2 === 0 ? "dust0" : "dust1", p.x, p.y, spin, 0.8);
+  } else {
+    ctx.fillStyle = "#9aa3ad";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (Math.sin(time / 180 + id * 1.7) > 0.85) {
+    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.beginPath();
+    ctx.arc(p.x + 3, p.y - 3, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+export function drawBar(
+  ctx: Ctx,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  fraction: number,
+  color: string,
+): void {
+  ctx.fillStyle = "rgba(10, 4, 20, 0.75)";
+  ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, w * Math.max(0, Math.min(1, fraction)), h);
+}
+
+export function drawShipHp(ctx: Ctx, x: number, y: number, hp: number, maxHp: number): void {
+  const w = 44;
+  drawBar(ctx, x - w / 2, y - 36, w, 4, Math.min(1, hp / maxHp), hpColor(hp / maxHp));
+  if (hp > maxHp) drawBar(ctx, x - w / 2, y - 31, w, 2, (hp - maxHp) / (maxHp / 2), "#ffd84d");
+}
+
+function hpColor(k: number): string {
+  if (k < 0.3) return "#ff4f4f";
+  if (k < 0.6) return "#ffb347";
+  return "#8dff3a";
+}
+
+export interface Status {
+  readonly hp: number;
+  readonly maxHp: number;
+  readonly overheal: number;
+  readonly heat: number;
+  readonly overheated: boolean;
+  readonly cooling: boolean;
+  readonly skill: string;
+  readonly skillFraction: number;
+}
+
+export function drawStatus(ctx: Ctx, view: View, s: Status, time: number): void {
+  const w = 224;
+  const h = 10;
+  const x = Math.round((view.width - w) / 2);
+  let y = Math.round(view.height - 126 - 14 - 3 * (h + 16));
+  ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+  ctx.font = "bold 11px ui-monospace, Menlo, monospace";
+  const label = (text: string) => {
+    ctx.fillStyle = "rgba(10, 4, 20, 0.6)";
+    ctx.fillRect(x - 1, y - 13, ctx.measureText(text).width + 6, 13);
+    ctx.fillStyle = "#f4e9ff";
+    ctx.fillText(text, x + 2, y - 3);
+  };
+
+  label(`HP ${Math.ceil(s.hp)}`);
+  drawBar(ctx, x, y, w, h, Math.min(1, s.hp / s.maxHp), hpColor(s.hp / s.maxHp));
+  if (s.hp > s.maxHp) {
+    ctx.fillStyle = "#ffd84d";
+    ctx.fillRect(x, y + h - 3, (w * (s.hp - s.maxHp)) / (s.overheal - s.maxHp), 3);
+  }
+  y += h + 16;
+
+  const blink = s.overheated && Math.floor(time / 150) % 2 === 0;
+  label(s.cooling ? "НАГРІВ (радіатор)" : s.overheated ? "ПЕРЕГРІВ" : "НАГРІВ");
+  const heatColor = s.cooling
+    ? "#7fd4ff"
+    : s.overheated
+      ? blink
+        ? "#ff2a10"
+        : "#8a1a0a"
+      : `hsl(${40 - 40 * (s.heat / 100)}, 100%, 55%)`;
+  drawBar(ctx, x, y, w, h, s.heat / 100, heatColor);
+  y += h + 16;
+
+  label(s.skill);
+  drawBar(ctx, x, y, w, h, s.skillFraction, "#4fa8ff");
+}
+
 export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
@@ -288,6 +429,7 @@ export function drawShip(
   own = true,
   sprites: Sprites | null = null,
   frame = own ? "player" : "dummy",
+  heat = 0,
 ): void {
   if (sprites?.ships) {
     if (ship.thrust) {
@@ -304,6 +446,7 @@ export function drawShip(
       );
     }
     drawSprite(ctx, sprites.ships, frame, ship.x, ship.y, ship.angle);
+    if (heat > 0.05) drawTinted(ctx, sprites.ships, frame, ship, HOT, Math.min(0.85, heat * 0.85));
     return;
   }
 
@@ -465,20 +608,20 @@ export function drawExplosion(ctx: Ctx, e: ExplosionLook): void {
 const PICKUP_COLORS: Readonly<Record<PickupType, string>> = {
   shield: "#4fd8ff",
   rapid: "#ffd23f",
-  homing: "#ff7ad9",
   missile: "#ff5c5c",
   nuke: "#ffd23f",
   gravity: "#4fa8ff",
   warp: "#8dff3a",
+  radiator: "#7fd4ff",
 };
 const PICKUP_LETTERS: Readonly<Record<PickupType, string>> = {
   shield: "S",
   rapid: "R",
-  homing: "H",
   missile: "M",
   nuke: "N",
   gravity: "G",
   warp: "W",
+  radiator: "C",
 };
 
 export function drawPickup(ctx: Ctx, p: PickupLook, sprites: Sprites | null = null): void {

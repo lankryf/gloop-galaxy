@@ -11,7 +11,7 @@ import type { WellType } from "./sim/well.ts";
 import { WELL_TYPES } from "./sim/well.ts";
 
 export const PROTOCOL_VERSION = 0;
-export const BINARY_VERSION = 3;
+export const BINARY_VERSION = 4;
 export const TICK_RATE = 30;
 export const TICK_DT = 1 / TICK_RATE;
 export const MAX_MESSAGE_BYTES = 2048;
@@ -39,7 +39,7 @@ export const ShipFlag = {
   dead: 2,
   shield: 4,
   rapid: 8,
-  homing: 16,
+  overheated: 16,
   bot: 32,
   pull: 64,
   warp: 128,
@@ -126,6 +126,8 @@ const ShipSnapSchema = z.object({
   respawn: z.number().int().min(0).max(255),
   ability: AbilityTypeSchema.nullable(),
   charge: z.number().int().min(0).max(255),
+  heat: z.number().int().min(0).max(100),
+  cooling: z.boolean(),
 });
 const BulletSnapSchema = z.object({
   kind: z.literal("bullet"),
@@ -173,6 +175,13 @@ const WellSnapSchema = z.object({
   angle: Num,
   type: WellTypeSchema,
   mass: z.number().int().min(0).max(0xffff),
+  radius: z.number().int().min(0).max(255),
+});
+const DustSnapSchema = z.object({
+  kind: z.literal("dust"),
+  id: EntityIdSchema,
+  x: Num,
+  y: Num,
 });
 export const EntitySnapSchema = z.discriminatedUnion("kind", [
   ShipSnapSchema,
@@ -181,6 +190,7 @@ export const EntitySnapSchema = z.discriminatedUnion("kind", [
   PickupSnapSchema,
   WellSnapSchema,
   MissileSnapSchema,
+  DustSnapSchema,
 ]);
 export type EntitySnap = z.infer<typeof EntitySnapSchema>;
 export type ShipSnap = z.infer<typeof ShipSnapSchema>;
@@ -210,6 +220,7 @@ export const NetEventSchema = z.discriminatedUnion("type", [
     shipId: EntityIdSchema.nullable(),
   }),
   z.object({ type: z.literal("collapsed"), ...at, range: z.number().int().min(0).max(0xffff) }),
+  z.object({ type: z.literal("formed"), ...at, radius: z.number().int().min(0).max(255) }),
   z.object({
     type: z.literal("warped"),
     ...at,

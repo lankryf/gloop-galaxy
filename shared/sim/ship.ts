@@ -1,7 +1,6 @@
 import type { Seq } from "../ids.ts";
 import { seq } from "../ids.ts";
 import { ARENA } from "./arena.ts";
-import { homing } from "./behaviors.ts";
 import { BULLET, Bullet } from "./bullet.ts";
 import { Entity } from "./entity.ts";
 import { cos, hypot, sin } from "./fmath.ts";
@@ -24,7 +23,12 @@ export const SHIP = {
   rapidCooldown: 0.07,
   respawnDelay: 2,
   wallBounce: 0.5,
+  overheal: 1.5,
+  overhealDecay: 3,
 };
+
+export const HEAT = { max: 100, perShot: 6, perRapidShot: 3.5, cooling: 20, resumeAt: 30 };
+export const RADIATOR = 6;
 
 export interface Controls {
   readonly thrust: boolean;
@@ -141,6 +145,9 @@ export class Ship extends Entity {
   charge = 0;
   beaming = false;
   warpIn = 0;
+  heat = 0;
+  overheated = false;
+  coolFor = 0;
   #usedLast = false;
 
   constructor({
@@ -156,6 +163,11 @@ export class Ship extends Entity {
 
   get hp(): number {
     return this.#hp;
+  }
+
+  heal(amount: number): void {
+    if (this.dead) return;
+    this.#hp = Math.min(SHIP.maxHp * SHIP.overheal, this.#hp + amount);
   }
 
   get state(): ShipState {
@@ -183,6 +195,9 @@ export class Ship extends Entity {
     this.effects.clear();
     this.beaming = false;
     this.warpIn = 0;
+    this.heat = 0;
+    this.overheated = false;
+    this.coolFor = 0;
     this.deaths += 1;
     this.respawnIn = SHIP.respawnDelay;
   }
@@ -237,6 +252,11 @@ export class Ship extends Entity {
       case "warp":
         this.warpIn = WARP_DELAY;
         return;
+      case "radiator":
+        this.heat = 0;
+        this.overheated = false;
+        this.coolFor = RADIATOR;
+        return;
       default: {
         const never: never = ability;
         throw new Error(`Unknown ability ${String(never)}`);
@@ -248,10 +268,14 @@ export class Ship extends Entity {
     const nose = this.pos.add(Vector2.fromAngle(this.angle, this.radius + 8));
     const vel = this.vel.add(Vector2.fromAngle(this.angle, BULLET.speed));
     const bullet = new Bullet({ pos: nose, vel, ownerId: this.id, shot });
-    if (this.effects.has("homing")) {
-      bullet.behaviors.push(homing({ ignoreId: this.id, turnRate: 4 }));
-    }
     world.spawn(bullet);
+    if (this.coolFor <= 0) {
+      this.heat += this.effects.has("rapid") ? HEAT.perRapidShot : HEAT.perShot;
+      if (this.heat >= HEAT.max) {
+        this.heat = HEAT.max;
+        this.overheated = true;
+      }
+    }
     world.emit("fired", { shipId: this.id, x: nose.x, y: nose.y });
     this.cooldown = this.effects.has("rapid") ? SHIP.rapidCooldown : SHIP.fireCooldown;
   }
@@ -261,6 +285,8 @@ export class Ship extends Entity {
       if (left - dt <= 0) this.effects.delete(type);
       else this.effects.set(type, left - dt);
     }
+    if (this.#hp > SHIP.maxHp) this.#hp = Math.max(SHIP.maxHp, this.#hp - SHIP.overhealDecay * dt);
+    this.coolFor = Math.max(0, this.coolFor - dt);
     if (!this.dead) return;
     this.respawnIn -= dt;
     if (this.respawnIn <= 0) this.respawn(world);
@@ -275,7 +301,9 @@ export class Ship extends Entity {
     this.thrust = next.thrust;
 
     this.cooldown = Math.max(0, this.cooldown - dt);
-    if (controls.fire && this.cooldown === 0) this.fire(world, shot);
+    this.heat = Math.max(0, this.heat - HEAT.cooling * dt);
+    if (this.overheated && this.heat <= HEAT.resumeAt) this.overheated = false;
+    if (controls.fire && this.cooldown === 0 && !this.overheated) this.fire(world, shot);
     const use = controls.use === true;
     this.beaming = false;
     if (this.warpIn > 0) {

@@ -11,14 +11,14 @@ export type MissileType = (typeof MISSILE_TYPES)[number];
 
 export const MISSILE = {
   homing: {
-    speed: 420,
-    turnRate: 1.5,
+    speed: 640,
+    turnRate: 1.1,
     ttl: 5,
     radius: 10,
     blast: 130,
     damage: 70,
     seek: 1600,
-    cone: 1,
+    cone: 0.6,
   },
   nuke: {
     speed: 300,

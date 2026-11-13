@@ -85,11 +85,12 @@ export function decide(world: World, ship: Ship, rng: Rng): Controls {
   const use =
     (ship.ability === "missile" && aimed && target.distance < 1200) ||
     (ship.ability === "nuke" && aimed && target.distance > 300 && target.distance < 600) ||
-    (ship.ability === "gravity" && aimed && target.distance < 800);
+    (ship.ability === "gravity" && aimed && target.distance < 800) ||
+    (ship.ability === "radiator" && ship.heat > 80);
   return {
     ...steerTo(diff, 0.08),
     thrust: target.distance > 260 && Math.abs(diff) < 0.9,
-    fire: aimed && target.distance < 650 && rng.next() < 0.7,
+    fire: aimed && target.distance < 650 && ship.heat < 85 && rng.next() < 0.7,
     use,
   };
 }
