@@ -22,8 +22,8 @@ export function bodyAt(x: number, y: number, radius: number): MovingWell {
   return { ...bodyField(x, y, radius), vx: 0, vy: 0 };
 }
 
-export function pullAt(x: number, y: number): MovingWell {
-  return { ...pullField(x, y), vx: 0, vy: 0 };
+export function pullAt(x: number, y: number, angle: number): MovingWell {
+  return { ...pullField(x, y, angle), vx: 0, vy: 0 };
 }
 
 export function toWellField(e: WellSnap): MovingWell {

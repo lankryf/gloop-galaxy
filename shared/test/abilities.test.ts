@@ -55,14 +55,18 @@ describe("abilities", () => {
     expect(edge.ship.pos.x).toBeLessThan(3200);
   });
 
-  test("gravity pull drags pickups to the ship", () => {
+  test("gravity beam drags what is ahead and leaves the rest", () => {
     const { world, ship } = setup();
-    const pickup = world.spawn(new Pickup({ pos: new Vector2(1200, 900), type: "rapid" }));
+    const ahead = world.spawn(new Pickup({ pos: new Vector2(1300, 920), type: "rapid" }));
+    const behind = world.spawn(new Pickup({ pos: new Vector2(500, 900), type: "shield" }));
+    const aside = world.spawn(new Pickup({ pos: new Vector2(800, 1200), type: "homing" }));
     ship.applyPickup("gravity");
     press(world, ship);
     expect(ship.effects.has("pull")).toBe(true);
     for (let i = 0; i < 15; i++) world.step(dt);
-    expect(pickup.pos.x).toBeLessThan(1200);
+    expect(ahead.pos.x).toBeLessThan(1250);
+    expect(behind.pos.x).toBeCloseTo(500, 0);
+    expect(aside.pos.y).toBeCloseTo(1200, 0);
   });
 
   test("nuke blows up asteroids around but spares its owner", () => {

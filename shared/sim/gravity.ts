@@ -6,6 +6,19 @@ export interface WellField {
   readonly radius: number;
   readonly range: number;
   readonly strength: number;
+  readonly beam?: { readonly dx: number; readonly dy: number };
+}
+
+export const PULL = { radius: 30, range: 900, strength: 700, width: 60, spread: 0.18 };
+
+function beamAt(well: WellField, dx: number, dy: number): number {
+  const beam = well.beam;
+  if (!beam) return 0;
+  const along = -(dx * beam.dx + dy * beam.dy);
+  if (along <= 0 || along > well.range) return 0;
+  const across = Math.abs(dx * beam.dy - dy * beam.dx);
+  if (across > PULL.width + along * PULL.spread) return 0;
+  return well.strength * (1 - (0.6 * along) / well.range);
 }
 
 export function gravityAt(
@@ -19,6 +32,14 @@ export function gravityAt(
     const dx = well.x - x;
     const dy = well.y - y;
     const d2 = dx * dx + dy * dy;
+    if (well.beam) {
+      const pull = beamAt(well, dx, dy);
+      if (pull === 0) continue;
+      const d = Math.sqrt(d2) || 1;
+      ax += (dx / d) * pull;
+      ay += (dy / d) * pull;
+      continue;
+    }
     if (d2 === 0 || d2 > well.range * well.range) continue;
     const soft = well.radius * 1.5;
     const pull = well.strength / Math.max(d2, soft * soft);
@@ -41,10 +62,15 @@ export function bodyField(x: number, y: number, radius: number): WellField {
   };
 }
 
-export const PULL = { radius: 30, range: 750, strength: 7e6 };
-
-export function pullField(x: number, y: number): WellField {
-  return { x, y, ...PULL };
+export function pullField(x: number, y: number, angle: number): WellField {
+  return {
+    x,
+    y,
+    radius: PULL.radius,
+    range: PULL.range,
+    strength: PULL.strength,
+    beam: { dx: Math.cos(angle), dy: Math.sin(angle) },
+  };
 }
 
 export function gravityFields(world: World, except: unknown = null): WellField[] {
@@ -56,7 +82,7 @@ export function gravityFields(world: World, except: unknown = null): WellField[]
     fields.push(bodyField(pickup.pos.x, pickup.pos.y, pickup.radius));
   for (const ship of world.ofKind("ship")) {
     if (ship !== except && !ship.dead && ship.effects.has("pull"))
-      fields.push(pullField(ship.pos.x, ship.pos.y));
+      fields.push(pullField(ship.pos.x, ship.pos.y, ship.angle));
   }
   return fields;
 }
@@ -66,8 +92,7 @@ export function applyGravity(world: World, dt: number): void {
   if (all.length === 0) return;
   const pulls: WellField[] = [];
   const natural: WellField[] = [];
-  for (const field of all)
-    (field.strength === PULL.strength && field.range === PULL.range ? pulls : natural).push(field);
+  for (const field of all) (field.beam ? pulls : natural).push(field);
 
   for (const entity of world) {
     if (!entity.alive) continue;

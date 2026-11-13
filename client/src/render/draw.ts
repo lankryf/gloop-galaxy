@@ -1,4 +1,5 @@
 import type { ArenaSize } from "@gloop/shared/sim/arena.ts";
+import { PULL } from "@gloop/shared/sim/gravity.ts";
 import type { PickupType } from "@gloop/shared/sim/pickup.ts";
 import type { Point } from "@gloop/shared/sim/vector.ts";
 import type { WellType } from "@gloop/shared/sim/well.ts";
@@ -490,16 +491,34 @@ export function drawPickup(ctx: Ctx, p: PickupLook, sprites: Sprites | null = nu
   ctx.restore();
 }
 
-export function drawPull(ctx: Ctx, p: Point, time: number): void {
+export function drawPull(ctx: Ctx, p: Pose, time: number): void {
+  const near = PULL.width;
+  const far = PULL.width + PULL.range * PULL.spread;
   ctx.save();
-  for (let i = 0; i < 3; i++) {
-    const phase = (((time / 900 + i / 3) % 1) + 1) % 1;
-    const r = 260 * (1 - phase) + 40;
-    ctx.globalAlpha = 0.5 * phase;
-    ctx.strokeStyle = "#4fa8ff";
-    ctx.lineWidth = 4;
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.angle);
+  const glow = ctx.createLinearGradient(0, 0, PULL.range, 0);
+  glow.addColorStop(0, "rgba(79, 168, 255, 0.35)");
+  glow.addColorStop(1, "rgba(79, 168, 255, 0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.moveTo(20, -near * 0.5);
+  ctx.lineTo(PULL.range, -far);
+  ctx.lineTo(PULL.range, far);
+  ctx.lineTo(20, near * 0.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#4fa8ff";
+  ctx.lineWidth = 3;
+  for (let i = 0; i < 5; i++) {
+    const phase = (((time / 700 + i / 5) % 1) + 1) % 1;
+    const x = PULL.range * (1 - phase);
+    const half = PULL.width + x * PULL.spread;
+    ctx.globalAlpha = 0.7 * phase;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.moveTo(x + 18, -half);
+    ctx.lineTo(x, 0);
+    ctx.lineTo(x + 18, half);
     ctx.stroke();
   }
   ctx.restore();

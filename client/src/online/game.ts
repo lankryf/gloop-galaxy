@@ -251,7 +251,7 @@ export function startOnlineGame({
       else if (e.kind === "well") wells.push(toWellField(e));
       else if (e.kind === "asteroid") wells.push(bodyAt(e.x, e.y, e.radius));
       else if (e.kind === "pickup") wells.push(bodyAt(e.x, e.y, PICKUP_RADIUS));
-      else if (e.kind === "ship" && e.flags & ShipFlag.pull) wells.push(pullAt(e.x, e.y));
+      else if (e.kind === "ship" && e.flags & ShipFlag.pull) wells.push(pullAt(e.x, e.y, e.angle));
       else if (e.kind === "bullet" && e.owner === myShip) {
         shots.add(e.shot);
         seenShots.add(e.shot);
