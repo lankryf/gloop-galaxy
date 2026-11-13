@@ -55,7 +55,7 @@ export const IDLE: Controls = {
   boost: false,
 };
 
-export const BOOST = { thrust: 1.9, maxSpeed: 1.5, heat: 10, settle: 1.5 };
+export const BOOST = { thrust: 1.9, maxSpeed: 1.5, heat: 20, settle: 1.5 };
 
 export const WARP_DISTANCE = 900;
 export const WARP_DELAY = 3;
