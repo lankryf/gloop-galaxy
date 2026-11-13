@@ -1,4 +1,5 @@
-const CACHE = "gloop-v1";
+const CACHE = "gloop-v2";
+const HASHED = /-[\w-]{8}\.(js|css)$/;
 const SHELL = [
   "/",
   "/manifest.webmanifest",
@@ -29,7 +30,7 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/") || url.pathname === "/ws" || url.pathname === "/health")
     return;
 
-  if (url.pathname.startsWith("/assets/")) {
+  if (url.pathname.startsWith("/assets/") && HASHED.test(url.pathname)) {
     event.respondWith(
       caches.match(event.request).then(
         (cached) =>
@@ -42,6 +43,21 @@ self.addEventListener("fetch", (event) => {
             return response;
           }),
       ),
+    );
+    return;
+  }
+
+  if (url.pathname.startsWith("/assets/")) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            void caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request).then((cached) => cached ?? Response.error())),
     );
     return;
   }

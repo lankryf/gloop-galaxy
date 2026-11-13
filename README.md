@@ -918,7 +918,7 @@ $${\color{red}\text{7) git push --tags. Потім відкрити https://НА
 
 ### PWA
 
-`manifest.webmanifest` з іконками 192 і 512 (maskable), `display: fullscreen`, альбомна орієнтація, і service worker (`public/sw.js`): статика з `/assets/` – cache-first, сторінка – network-first з запасною копією в кеші, `/api`, `/ws` і `/health` не кешуються ніколи. Chrome (`Page.getInstallabilityErrors`) не знаходить жодної перешкоди для встановлення. Реєструється лише в продакшн-збірці, щоб не заважати Vite в розробці.
+`manifest.webmanifest` з іконками 192 і 512 (maskable), `display: fullscreen`, альбомна орієнтація, і service worker (`public/sw.js`): бандли Vite з хешем у назві – cache-first, решта `/assets/` (спрайти, звуки, арени, `manifest.json`) – network-first, бо в їхніх назвах хешу немає і після оновлення гравець інакше бачив би старі картинки; сторінка – network-first з запасною копією в кеші, `/api`, `/ws` і `/health` не кешуються ніколи. Chrome (`Page.getInstallabilityErrors`) не знаходить жодної перешкоди для встановлення. Реєструється лише в продакшн-збірці, щоб не заважати Vite в розробці.
 
 $${\color{red}\text{ПЕРЕВІРИТИ НА ТЕЛЕФОНІ: відкрити публічну адресу в Chrome на Android → меню → «Встановити застосунок» (або Safari → Поділитися → На початковий екран);}}$$
 $${\color{red}\text{скріншот іконки на головному екрані і відкритої гри → docs/img/lab08-pwa.png}}$$
