@@ -104,7 +104,7 @@ export function startGame({
       right: input.isDown("ArrowRight") || input.isDown("KeyD"),
       fire: input.isDown("Space"),
       use: input.isDown("KeyE") || input.isDown("ShiftLeft"),
-      boost: input.isDown("KeyB"),
+      boost: input.isDown("KeyQ"),
     };
   }
 
