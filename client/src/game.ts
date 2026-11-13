@@ -32,6 +32,7 @@ import {
   drawCourse,
   drawDust,
   drawExplosion,
+  drawForming,
   drawHud,
   drawMissile,
   drawPickup,
@@ -168,6 +169,7 @@ export function startGame({
       const p = interpolate(a, alpha);
       if (!camera.place(p.x, p.y)) continue;
       drawAsteroid(ctx, a, p, sprites);
+      drawForming(ctx, p, a.radius, a.formingProgress, now);
     }
     for (const b of world.ofKind("bullet")) {
       const p = interpolate(b, alpha);
@@ -177,8 +179,16 @@ export function startGame({
     for (const m of world.ofKind("missile")) {
       if (m.type === "nuke") drawCourse(ctx, m.pos.x, m.pos.y, m.vel.angle(), ARENA, now);
     }
-    if (!ship.dead && ship.ability === "nuke")
-      drawCourse(ctx, ship.pos.x, ship.pos.y, ship.angle, ARENA, now, 0.25);
+    if (!ship.dead)
+      drawCourse(
+        ctx,
+        ship.pos.x,
+        ship.pos.y,
+        ship.angle,
+        ARENA,
+        now,
+        ship.ability === "nuke" ? 0.5 : 0.22,
+      );
     for (const m of world.ofKind("missile")) {
       const p = interpolate(m, alpha);
       if (!camera.place(p.x, p.y)) continue;

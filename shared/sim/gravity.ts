@@ -88,24 +88,14 @@ export function gravityFields(world: World, except: unknown = null): WellField[]
 }
 
 export function applyGravity(world: World, dt: number): void {
-  const all = gravityFields(world);
-  if (all.length === 0) return;
-  const pulls: WellField[] = [];
-  const natural: WellField[] = [];
-  for (const field of all) (field.beam ? pulls : natural).push(field);
+  const natural = gravityFields(world).filter((field) => !field.beam);
+  if (natural.length === 0) return;
 
   for (const entity of world) {
     if (!entity.alive) continue;
-    const fields =
-      entity.kind === "asteroid" || entity.kind === "missile"
-        ? all
-        : entity.kind === "bullet"
-          ? natural
-          : entity.kind === "pickup" || entity.kind === "dust"
-            ? pulls
-            : null;
-    if (!fields || fields.length === 0) continue;
-    const { ax, ay } = gravityAt(entity.pos.x, entity.pos.y, fields);
+    if (entity.kind !== "asteroid" && entity.kind !== "missile" && entity.kind !== "bullet")
+      continue;
+    const { ax, ay } = gravityAt(entity.pos.x, entity.pos.y, natural);
     if (ax !== 0 || ay !== 0) {
       entity.vel = entity.vel.add({ x: ax * dt, y: ay * dt });
     }

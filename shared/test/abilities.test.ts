@@ -24,6 +24,15 @@ function press(world: World, ship: Ship) {
 }
 
 describe("abilities", () => {
+  test("invisibility lasts 10 seconds", () => {
+    const { world, ship } = setup();
+    ship.applyPickup("stealth");
+    for (let t = 0; t < 9.5; t += dt) world.step(dt);
+    expect(ship.effects.has("stealth")).toBe(true);
+    for (let t = 0; t < 1; t += dt) world.step(dt);
+    expect(ship.effects.has("stealth")).toBe(false);
+  });
+
   test("ability pickup goes into the slot, effect pickup does not", () => {
     const { ship } = setup();
     ship.applyPickup("nuke");
@@ -65,18 +74,27 @@ describe("abilities", () => {
     expect(edge.ship.pos.x).toBeLessThan(ARENA.width);
   });
 
-  test("gravity beam works only while the key is held and runs out after 5 s", () => {
+  test("gravity beam pulls only ships, only while the key is held, and runs out after 5 s", () => {
     const { world, ship } = setup();
-    const ahead = world.spawn(new Pickup({ pos: new Vector2(1300, 920), type: "rapid" }));
-    const behind = world.spawn(new Pickup({ pos: new Vector2(500, 900), type: "shield" }));
-    const aside = world.spawn(new Pickup({ pos: new Vector2(800, 1200), type: "radiator" }));
+    const ahead = world.spawn(new Ship({ pos: new Vector2(1400, 920), name: "ahead" }));
+    const behind = world.spawn(new Ship({ pos: new Vector2(300, 900), name: "behind" }));
+    const pickup = world.spawn(new Pickup({ pos: new Vector2(1300, 900), type: "rapid" }));
+    const rock = world.spawn(
+      new Asteroid({
+        pos: new Vector2(1250, 1000),
+        vel: new Vector2(),
+        radius: 15,
+        rng: createRng(4),
+      }),
+    );
     ship.applyPickup("gravity");
     ship.controls = { ...IDLE, use: true };
     for (let i = 0; i < 15; i++) world.step(dt);
     expect(ship.beaming).toBe(true);
-    expect(ahead.pos.x).toBeLessThan(1280);
-    expect(behind.pos.x).toBeCloseTo(500, 0);
-    expect(aside.pos.y).toBeCloseTo(1200, 0);
+    expect(ahead.pos.x).toBeLessThan(1370);
+    expect(behind.pos.x).toBeCloseTo(300, 0);
+    expect(pickup.pos.x).toBe(1300);
+    expect(rock.vel.length()).toBeLessThan(5);
 
     ship.controls = IDLE;
     world.step(dt);

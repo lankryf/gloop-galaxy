@@ -81,5 +81,5 @@ test("ships bounce off the arena wall", () => {
 });
 
 test("scenario hash matches the value computed in Chrome", () => {
-  assert.equal(hashWorld(runScenario({ steps: 1000 })), "6716f582");
+  assert.equal(hashWorld(runScenario({ steps: 1000 })), "7b66dfce");
 });

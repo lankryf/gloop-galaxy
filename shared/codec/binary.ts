@@ -38,9 +38,9 @@ const HEADER = 12;
 const COMMON = 11;
 const EVENT_SIZE = 12;
 const SIZE: Readonly<Record<EntitySnap["kind"], number>> = {
-  ship: COMMON + 18,
+  ship: COMMON + 19,
   bullet: COMMON + 14,
-  asteroid: COMMON + 4,
+  asteroid: COMMON + 5,
   pickup: COMMON + 1,
   well: COMMON + 14,
   missile: COMMON + 11,
@@ -115,6 +115,11 @@ function missileAt(index: number): MissileType {
   return type;
 }
 
+function percentAt(value: number): number {
+  if (value > 100) throw new CodecError(`bad percent ${value}`);
+  return value;
+}
+
 function heatAt(value: number): number {
   if (value > 100) throw new CodecError(`bad heat ${value}`);
   return value;
@@ -183,6 +188,7 @@ function writeEntity(view: DataView, o: number, e: EntitySnap): number {
       view.setUint8(p + 15, e.ability === null ? 0 : ABILITY_TYPES.indexOf(e.ability) + 1);
       view.setUint8(p + 16, e.charge);
       view.setUint8(p + 17, e.heat | (e.cooling ? 128 : 0));
+      view.setUint8(p + 18, e.stealth ? 1 : 0);
       break;
     case "missile":
       view.setFloat32(p, e.vx, true);
@@ -200,6 +206,7 @@ function writeEntity(view: DataView, o: number, e: EntitySnap): number {
       view.setInt16(p, angleToInt(e.angle), true);
       view.setUint8(p + 2, e.radius);
       view.setUint8(p + 3, e.hunter ? 1 : 0);
+      view.setUint8(p + 4, e.forming);
       break;
     case "pickup":
       view.setUint8(p, PICKUP_TYPES.indexOf(e.type));
@@ -322,6 +329,7 @@ function readEntity(view: DataView, o: number): EntitySnap {
         charge: view.getUint8(p + 16),
         heat: heatAt(view.getUint8(p + 17) & 127),
         cooling: (view.getUint8(p + 17) & 128) !== 0,
+        stealth: view.getUint8(p + 18) === 1,
       };
     case "missile":
       return {
@@ -354,6 +362,7 @@ function readEntity(view: DataView, o: number): EntitySnap {
         angle: view.getInt16(p, true) / ANGLE_SCALE,
         radius: view.getUint8(p + 2),
         hunter: view.getUint8(p + 3) === 1,
+        forming: percentAt(view.getUint8(p + 4)),
       };
     case "pickup":
       return { kind, id, x, y, type: pickupAt(view.getUint8(p)) };

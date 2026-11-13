@@ -24,6 +24,7 @@ function sampleSnapshot(ships = 5, bullets = 12, asteroids = 6): Snapshot {
       charge: 0,
       heat: 0,
       cooling: false,
+      stealth: false,
     });
   }
   for (let i = 0; i < bullets; i++) {
@@ -47,6 +48,7 @@ function sampleSnapshot(ships = 5, bullets = 12, asteroids = 6): Snapshot {
       angle: 0.5 * i,
       radius: 40,
       hunter: i === 0,
+      forming: 0,
     });
   }
   entities.push({ kind: "pickup", id: entityId(id++), x: 500, y: 500, type: "rapid" });

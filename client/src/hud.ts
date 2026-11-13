@@ -24,6 +24,7 @@ export const PICKUP_NAMES: Readonly<Record<PickupType, string>> = {
   gravity: "ГРАВІТАЦІЙНЕ ПРИТЯГУВАННЯ",
   warp: "ВАРП-СТРИБОК",
   radiator: "РАДІАТОР",
+  stealth: "НЕВИДИМКА",
 };
 
 export interface Hud {

@@ -21,8 +21,9 @@ const SCORE = { ship: 100 };
 export const ROCKS = {
   splitChance: 0.5,
   splitMin: 24,
-  mergeSpeed: 90,
-  planetFrom: 90,
+  mergeChance: 0.2,
+  breakChance: 0.2,
+  settleAge: 0.8,
   dustPerRadius: 1 / 9,
   planetPieces: 10,
   planetBack: 60,
@@ -102,9 +103,17 @@ function pickupShip(world: World, pickup: Pickup, ship: Ship): void {
 }
 
 function asteroidAsteroid(world: World, a: Asteroid, b: Asteroid): void {
-  if (a.vel.sub(b.vel).length() < ROCKS.mergeSpeed) {
-    merge(world, a, b);
-    return;
+  if (a.age > ROCKS.settleAge && b.age > ROCKS.settleAge) {
+    const roll = world.rng.next();
+    if (roll < ROCKS.mergeChance) {
+      merge(world, a, b);
+      return;
+    }
+    if (roll < ROCKS.mergeChance + ROCKS.breakChance) {
+      crumble(world, a, a.pos.sub(b.pos));
+      crumble(world, b, b.pos.sub(a.pos));
+      return;
+    }
   }
   const { normal, overlap } = pushApart(a, b);
   a.pos = a.pos.sub(normal.scale(overlap / 2));
@@ -127,15 +136,20 @@ function merge(world: World, a: Asteroid, b: Asteroid): void {
   const vel = a.vel.scale(ma / total).add(b.vel.scale(mb / total));
   const fragment = a.fragment && b.fragment;
   if (!a.fragment && !b.fragment) replaceAsteroid(world);
-  if (radius >= ROCKS.planetFrom) {
-    if (!fragment) replaceAsteroid(world);
-    world.spawn(new GravityWell({ type: "planet", pos, vel: vel.scale(0.2), radius }));
-    world.emit("formed", { x: pos.x, y: pos.y, radius });
-    return;
-  }
   const merged = world.spawn(new Asteroid({ pos, vel, radius, rng: world.rng }));
   merged.entered = a.entered || b.entered;
   merged.fragment = fragment;
+  merged.forming = Math.max(a.forming, b.forming);
+}
+
+function crumble(world: World, asteroid: Asteroid, away: Vector2): void {
+  if (asteroid.radius >= ROCKS.splitMin) {
+    split(world, asteroid, away);
+    return;
+  }
+  asteroid.alive = false;
+  explode(world, asteroid.pos, asteroid.radius / 45, "#b49ad1");
+  if (!asteroid.fragment) replaceAsteroid(world);
 }
 
 function dropDust(world: World, asteroid: Asteroid): void {

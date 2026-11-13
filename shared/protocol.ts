@@ -11,7 +11,7 @@ import type { WellType } from "./sim/well.ts";
 import { WELL_TYPES } from "./sim/well.ts";
 
 export const PROTOCOL_VERSION = 0;
-export const BINARY_VERSION = 4;
+export const BINARY_VERSION = 5;
 export const TICK_RATE = 30;
 export const TICK_DT = 1 / TICK_RATE;
 export const MAX_MESSAGE_BYTES = 2048;
@@ -129,6 +129,7 @@ const ShipSnapSchema = z.object({
   charge: z.number().int().min(0).max(255),
   heat: z.number().int().min(0).max(100),
   cooling: z.boolean(),
+  stealth: z.boolean(),
 });
 const BulletSnapSchema = z.object({
   kind: z.literal("bullet"),
@@ -148,6 +149,7 @@ const AsteroidSnapSchema = z.object({
   angle: Num,
   radius: z.number().int().min(0).max(255),
   hunter: z.boolean(),
+  forming: z.number().int().min(0).max(100),
 });
 const MissileSnapSchema = z.object({
   kind: z.literal("missile"),

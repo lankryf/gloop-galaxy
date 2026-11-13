@@ -3,7 +3,7 @@ import { Entity } from "./entity.ts";
 import { Vector2 } from "./vector.ts";
 import type { World } from "./world.ts";
 
-export const EFFECT_TYPES: readonly ["shield", "rapid"] = ["shield", "rapid"];
+export const EFFECT_TYPES: readonly ["shield", "rapid", "stealth"] = ["shield", "rapid", "stealth"];
 export type EffectType = (typeof EFFECT_TYPES)[number];
 
 export const ABILITY_TYPES: readonly ["missile", "nuke", "gravity", "warp", "radiator"] = [
@@ -23,12 +23,14 @@ export const PICKUP_TYPES: readonly [
   "gravity",
   "warp",
   "radiator",
-] = ["shield", "rapid", "missile", "nuke", "gravity", "warp", "radiator"];
+  "stealth",
+] = ["shield", "rapid", "missile", "nuke", "gravity", "warp", "radiator", "stealth"];
 export type PickupType = (typeof PICKUP_TYPES)[number];
 
 export const EFFECT_DURATION: Readonly<Record<EffectType, number>> = {
   shield: 6,
   rapid: 8,
+  stealth: 10,
 };
 
 export function isAbility(type: PickupType): type is AbilityType {

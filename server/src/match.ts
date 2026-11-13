@@ -74,6 +74,7 @@ function snapshotOf(e: AnyEntity): EntitySnap | null {
         charge: Math.min(255, Math.ceil((e.ability === "gravity" ? e.charge : e.warpIn) * 10)),
         heat: Math.min(100, Math.round(e.heat)),
         cooling: e.coolFor > 0,
+        stealth: e.effects.has("stealth"),
       };
     case "missile":
       return { ...base, kind: "missile", vx: e.vel.x, vy: e.vel.y, owner: e.ownerId, type: e.type };
@@ -86,6 +87,7 @@ function snapshotOf(e: AnyEntity): EntitySnap | null {
         angle: e.angle,
         radius: Math.round(e.radius),
         hunter: e.hunter,
+        forming: Math.round(e.formingProgress * 100),
       };
     case "pickup":
       return { ...base, kind: "pickup", type: e.type };

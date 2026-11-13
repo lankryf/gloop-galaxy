@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { entityId } from "../ids.ts";
-import { Asteroid } from "../sim/asteroid.ts";
+import { Asteroid, FORMING } from "../sim/asteroid.ts";
 import { Bullet } from "../sim/bullet.ts";
 import { DUST, Dust } from "../sim/dust.ts";
 import { MISSILE, Missile } from "../sim/missile.ts";
@@ -188,30 +188,61 @@ describe("asteroids and planets", () => {
     expect([...world.ofKind("well")].some((w) => w.type === "planet")).toBe(true);
   });
 
-  test("slow asteroids stick together, and a big enough lump becomes a planet", () => {
-    const world = new World({ seed: 1 });
-    const a = rock(world, 2000, 1300, 40, 20);
-    const b = rock(world, 2075, 1300, 40, -20);
-    world.step(dt);
-    expect(a.alive || b.alive).toBe(false);
-    const [merged] = world.ofKind("asteroid");
-    expect(merged?.radius).toBeCloseTo(Math.cbrt(2 * 40 ** 3), 5);
-
-    const lump = new World({ seed: 2 });
-    rock(lump, 2000, 1300, 75, 10);
-    rock(lump, 2000 + 75 + 60, 1300, 70, -10);
-    lump.step(dt);
-    const planets = [...lump.ofKind("well")];
-    expect(planets).toHaveLength(1);
-    expect(planets[0]?.radius).toBeGreaterThanOrEqual(ROCKS.planetFrom);
-    expect(count(lump, "asteroid")).toBe(0);
+  test("colliding asteroids merge 20% of the time, break 20% of the time, otherwise bounce", () => {
+    const seen = { merge: 0, crumble: 0, bounce: 0 };
+    for (let seed = 1; seed <= 200; seed++) {
+      const world = new World({ seed });
+      const a = rock(world, 2000, 1300, 40, 20);
+      const b = rock(world, 2075, 1300, 40, -20);
+      a.age = 1;
+      b.age = 1;
+      world.step(dt);
+      const left = [...world.ofKind("asteroid")];
+      if (a.alive && b.alive) seen.bounce++;
+      else if (left.length === 1) {
+        seen.merge++;
+        expect(left[0]?.radius).toBeCloseTo(Math.cbrt(2 * 40 ** 3), 5);
+      } else {
+        seen.crumble++;
+        expect(left.length).toBeGreaterThanOrEqual(4);
+      }
+    }
+    expect(seen.merge).toBeGreaterThan(20);
+    expect(seen.merge).toBeLessThan(60);
+    expect(seen.crumble).toBeGreaterThan(20);
+    expect(seen.crumble).toBeLessThan(60);
+    expect(seen.bounce).toBeGreaterThan(90);
   });
 
-  test("fast asteroids bounce instead of merging", () => {
+  test("fresh pieces do not merge or break right away", () => {
     const world = new World({ seed: 1 });
-    rock(world, 2000, 1300, 40, 200);
-    rock(world, 2075, 1300, 40, -200);
-    world.step(dt);
+    rock(world, 2000, 1300, 40, 20);
+    rock(world, 2075, 1300, 40, -20);
+    for (let i = 0; i < 5; i++) world.step(dt);
     expect(count(world, "asteroid")).toBe(2);
+  });
+
+  test("a big asteroid slowly turns into a planet far from other big bodies", () => {
+    const world = new World({ seed: 1 });
+    const big = rock(world, 2400, 1350, FORMING.radius + 5);
+    for (let t = 0; t < FORMING.time / 2; t += dt) world.step(dt);
+    expect(big.alive).toBe(true);
+    expect(big.formingProgress).toBeGreaterThan(0.4);
+    for (let t = 0; t < FORMING.time / 2 + 0.2; t += dt) world.step(dt);
+    expect(big.alive).toBe(false);
+    const planets = [...world.ofKind("well")];
+    expect(planets).toHaveLength(1);
+    expect(planets[0]?.radius).toBeCloseTo(FORMING.radius + 5, 5);
+  });
+
+  test("inside the gravity of a planet or a black hole a big asteroid does not form", () => {
+    const world = new World({ seed: 1 });
+    const hole = world.spawn(new GravityWell({ type: "blackhole", pos: new Vector2(1000, 1350) }));
+    const big = rock(world, 1000 + hole.range * 0.9, 1350, FORMING.radius + 5);
+    for (let t = 0; t < 2; t += dt) world.step(dt);
+    expect(big.forming).toBe(0);
+    const small = rock(world, 3600, 1350, FORMING.radius - 20);
+    for (let t = 0; t < 1; t += dt) world.step(dt);
+    expect(small.forming).toBe(0);
   });
 });

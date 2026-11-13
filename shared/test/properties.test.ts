@@ -41,6 +41,7 @@ const entity: fc.Arbitrary<EntitySnap> = fc.oneof(
     charge: fc.integer({ min: 0, max: 255 }),
     heat: fc.integer({ min: 0, max: 100 }),
     cooling: fc.boolean(),
+    stealth: fc.boolean(),
     ability: fc.option(fc.constantFrom(...ABILITY_TYPES), { nil: null }),
   }),
   fc.record({
@@ -71,6 +72,7 @@ const entity: fc.Arbitrary<EntitySnap> = fc.oneof(
     angle,
     radius: fc.integer({ min: 0, max: 255 }),
     hunter: fc.boolean(),
+    forming: fc.integer({ min: 0, max: 100 }),
   }),
   fc.record({
     kind: fc.constant("pickup" as const),
@@ -167,9 +169,9 @@ const snapshot: fc.Arbitrary<Snapshot> = fc.record({
 });
 
 const SIZE: Record<EntitySnap["kind"], number> = {
-  ship: 29,
+  ship: 30,
   bullet: 25,
-  asteroid: 15,
+  asteroid: 16,
   pickup: 12,
   well: 25,
   missile: 22,

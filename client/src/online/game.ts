@@ -43,6 +43,7 @@ import {
   drawCourse,
   drawDust,
   drawExplosion,
+  drawForming,
   drawMissile,
   drawName,
   drawPickup,
@@ -107,6 +108,7 @@ function statusOf(ship: ShipSnap): Status {
     effects: [
       ship.flags & ShipFlag.shield ? "щит" : "",
       ship.flags & ShipFlag.rapid ? "швидкий вогонь" : "",
+      ship.stealth ? "невидимка" : "",
     ]
       .filter(Boolean)
       .join(" · "),
@@ -505,6 +507,7 @@ export function startOnlineGame({
         return;
       case "asteroid":
         drawAsteroid(ctx, e, e, sprites);
+        drawForming(ctx, e, e.radius, e.forming / 100, now);
         return;
       case "bullet":
         if (!(options.prediction && e.owner === myShip)) {
@@ -625,7 +628,8 @@ export function startOnlineGame({
           minimap.dot(ctx, e, 2, "#ffd84d");
           break;
         case "ship":
-          if (e.id !== myShip && !(e.flags & ShipFlag.dead)) minimap.dot(ctx, e, 3, "#ff9f1c");
+          if (e.id !== myShip && !(e.flags & ShipFlag.dead) && !e.stealth)
+            minimap.dot(ctx, e, 3, "#ff9f1c");
           break;
         case "missile":
           minimap.dot(ctx, e, e.type === "nuke" ? 3 : 2, "#ff4f4f");
@@ -647,13 +651,13 @@ export function startOnlineGame({
           assertNever(e);
       }
     }
-    if (pose && me?.ability === "nuke") {
+    if (pose) {
       const length = rayToEdge(pose.x, pose.y, pose.angle, ARENA);
       minimap.course(
         ctx,
         pose,
         { x: pose.x + Math.cos(pose.angle) * length, y: pose.y + Math.sin(pose.angle) * length },
-        "rgba(255, 210, 63, 0.9)",
+        me?.ability === "nuke" ? "rgba(255, 210, 63, 0.95)" : "rgba(141, 255, 58, 0.6)",
       );
     }
     if (pose) minimap.dot(ctx, pose, 3.5, "#8dff3a");
@@ -690,8 +694,16 @@ export function startOnlineGame({
       if (e.kind === "missile" && e.type === "nuke")
         drawCourse(ctx, e.x, e.y, Math.atan2(e.vy, e.vx), ARENA, now);
     }
-    if (pose && self?.ability === "nuke")
-      drawCourse(ctx, pose.x, pose.y, pose.angle, ARENA, now, 0.25);
+    if (pose)
+      drawCourse(
+        ctx,
+        pose.x,
+        pose.y,
+        pose.angle,
+        ARENA,
+        now,
+        self?.ability === "nuke" ? 0.5 : 0.22,
+      );
     for (const kind of DRAW_ORDER) {
       const margin = kind === "well" ? WELL_MARGIN : ENTITY_MARGIN;
       for (const e of sampled.entities) {
@@ -710,7 +722,9 @@ export function startOnlineGame({
     if (isAlive(self) && pose) {
       if (self.flags & ShipFlag.pull) drawPull(ctx, pose, now);
       if (self.flags & ShipFlag.warp) warpCharge(pose, self.charge, now);
+      if (self.stealth) ctx.globalAlpha = 0.55;
       drawShip(ctx, pose, now, true, sprites, "player", self.heat / 100);
+      ctx.globalAlpha = 1;
       if (self.flags & ShipFlag.shield) drawShield(ctx, pose, sprites);
       drawName(ctx, names.get(myShip) ?? "ти", pose.x, pose.y, true);
     }

@@ -4,9 +4,11 @@ import { homing } from "./behaviors.ts";
 import { Entity } from "./entity.ts";
 import type { Rng } from "./random.ts";
 import { Vector2 } from "./vector.ts";
+import { GravityWell } from "./well.ts";
 import type { World } from "./world.ts";
 
 export const ASTEROID_FIELD = { spawnGap: 40, lostAfter: 1400 };
+export const FORMING = { radius: 75, time: 10, decay: 0.5 };
 
 export function replaceAsteroid(world: World, delay = world.rng.range(0.5, 2.5)): void {
   world.later(delay, (w) => w.spawn(Asteroid.incoming(w.rng, ARENA)));
@@ -20,6 +22,8 @@ export class Asteroid extends Entity {
   hunter = false;
   entered = false;
   fragment = false;
+  age = 0;
+  forming = 0;
 
   constructor({ pos, vel, radius, rng }: { pos: Vector2; vel: Vector2; radius: number; rng: Rng }) {
     super({ pos, vel, radius });
@@ -28,9 +32,40 @@ export class Asteroid extends Entity {
     this.shape = Array.from({ length: 11 }, () => rng.range(0.78, 1.12));
   }
 
+  get formingProgress(): number {
+    return Math.min(1, this.forming / FORMING.time);
+  }
+
+  shielded(world: World): boolean {
+    for (const well of world.ofKind("well")) {
+      if (well.pos.sub(this.pos).length() < well.range) return true;
+    }
+    return false;
+  }
+
+  form(dt: number, world: World): void {
+    if (this.radius < FORMING.radius) {
+      this.forming = 0;
+      return;
+    }
+    if (this.shielded(world)) {
+      this.forming = Math.max(0, this.forming - FORMING.decay * dt);
+      return;
+    }
+    this.forming += dt;
+    if (this.forming < FORMING.time) return;
+    this.alive = false;
+    world.spawn(new GravityWell({ type: "planet", pos: this.pos, radius: this.radius }));
+    world.emit("formed", { x: this.pos.x, y: this.pos.y, radius: this.radius });
+    if (!this.fragment) replaceAsteroid(world);
+  }
+
   override update(dt: number, world: World): void {
     super.update(dt, world);
     this.angle += this.spin * dt;
+    this.age += dt;
+    this.form(dt, world);
+    if (!this.alive) return;
     const { x, y } = this.pos;
     if (!this.entered && inside(x, y, this.radius)) this.entered = true;
     const gone = this.entered

@@ -15,6 +15,20 @@ function setup() {
 }
 
 describe("Match", () => {
+  test("an invisible ship is marked in the snapshot", () => {
+    const { match, shipId } = setup();
+    const ship = match.world.get(shipId);
+    if (ship?.kind !== "ship") throw new Error("no ship");
+    ship.applyPickup("stealth");
+    const flag = () => {
+      const snap = snapshotEntities(match.world).find((e) => e.id === shipId);
+      return snap?.kind === "ship" && snap.stealth;
+    };
+    expect(flag()).toBe(true);
+    ship.effects.delete("stealth");
+    expect(flag()).toBe(false);
+  });
+
   test("every step sends one snapshot per player", () => {
     const { match, sent } = setup();
     for (let i = 0; i < 5; i++) match.step();
