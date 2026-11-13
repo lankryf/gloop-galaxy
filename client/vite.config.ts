@@ -61,10 +61,11 @@ export default defineConfig({
   },
   plugins: [testingMiddleware()],
   server: {
+    host: true,
     proxy: {
-      "/api": "http://localhost:8080",
-      "/ws": { target: "ws://localhost:8080", ws: true },
-      "/health": "http://localhost:8080",
+      "/api": "http://127.0.0.1:8080",
+      "/ws": { target: "ws://127.0.0.1:8080", ws: true },
+      "/health": "http://127.0.0.1:8080",
     },
   },
 });

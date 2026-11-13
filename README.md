@@ -35,6 +35,8 @@ npm run dev
 
 Відкрити http://localhost:5173 (Vite проксує `/api`, `/ws` і `/health` на сервер на 8080). Як у продакшні: `npm run build && npm start` → http://localhost:8080, або в контейнері: `docker compose up --build` → http://localhost:8080.
 
+**З іншого комп'ютера в тій самій мережі.** Дізнатись IP свого комп'ютера (`ipconfig getifaddr en0` на macOS, `ipconfig` на Windows) і відкрити на іншому `http://<IP>:5173` (`npm run dev`, Vite слухає всю мережу і в консолі пише цю адресу як `Network`) або `http://<IP>:8080` (Docker). Для `npm start` у `server/.env` треба поставити `HOST=0.0.0.0`, бо за замовчуванням сервер слухає тільки цей комп'ютер. Якщо задано `ALLOWED_ORIGINS`, у ньому має бути і адреса з IP, інакше WebSocket отримає 403. Файрвол має пропускати вхідні з'єднання на ці порти.
+
 Перевірки: `npm run typecheck`, `npm run lint`, `npm test` (Vitest), `npm run coverage`, `npm run e2e` (Playwright).
 
 ## Архітектура

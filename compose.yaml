@@ -11,7 +11,7 @@ services:
       - "8080:8080"
     environment:
       LOG_LEVEL: info
-      ALLOWED_ORIGINS: http://localhost:8080
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       MAX_CONNECTIONS_PER_IP: 8
     volumes:
       - match-logs:/app/logs
